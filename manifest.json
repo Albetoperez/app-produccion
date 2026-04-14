@@ -1,0 +1,10 @@
+{
+  "name": "Inspecciones Mecánicas FV",
+  "short_name": "Inspecciones FV",
+  "description": "App interna de inspecciones mecánicas de planta fotovoltaica",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0f766e",
+  "orientation": "portrait"
+}
