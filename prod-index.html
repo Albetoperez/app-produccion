@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>SIGMA PROD - Producción Operativa</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <link rel="stylesheet" href="prod-style.css">
+</head>
+<body>
+    <header>
+        <div class="logo-area" onclick="irInicio()" style="cursor: pointer;" title="Volver al menú principal">
+            <img src="logo.jpg" alt="Elecnor Logo" style="max-height: 40px;" onerror="this.style.display='none'">
+            <span class="brand">ELECNOR</span>
+            <span class="app-name">PRODUCCIÓN</span>
+        </div>
+        
+        <div class="nav-container" id="header-nav" style="display: none;">
+            <button class="btn-nav-outline" onclick="irInicio()">⬅ MENÚ PRINCIPAL</button>
+            <button class="btn-nav-white" onclick="document.getElementById('excel-file').click()" id="btn-import">📂 CARGAR LISTADOS</button>
+            <button class="btn-nav-outline" onclick="window.location.href='prod-dashboard.html'">📊 DASHBOARD PM</button>
+        </div>
+
+        <input type="file" id="excel-file" accept=".xlsx, .xls, .csv" multiple style="display:none;" onchange="importarArchivos(this)">
+    </header>
+
+    <div id="portada" class="portada-container">
+        <div class="portada-logo-wrapper">
+            <img src="logo.jpg" alt="Logo Elecnor" style="width: 250px; max-width: 80vw; margin-bottom: 20px;" onerror="this.style.display='none'">
+            <h2 class="portada-title">SIGMA PRODUCTION SYSTEM</h2>
+            <div style="color: #888; font-size: 0.78rem; font-weight: 700; margin-top: 10px; border-top: 1px solid #eee; padding-top: 12px; text-transform: uppercase; letter-spacing: 1px;">Delegación Renovables, Gas y Agua</div>
+        </div>
+        <div class="portada-botones">
+            <button class="btn-portada" onclick="abrirMapa()">
+                <span style="font-size:2rem;">🗺️</span>
+                <div>
+                    <strong style="display:block; font-size:1.1rem; margin-bottom: 3px;">Mapa Operativo</strong>
+                    <small style="font-weight:400; opacity:0.85; font-size:0.8rem;">Entrada de avances en terreno</small>
+                </div>
+            </button>
+            <button class="btn-portada" onclick="window.location.href='prod-dashboard.html'">
+                <span style="font-size:2rem;">📊</span>
+                <div>
+                    <strong style="display:block; font-size:1.1rem; margin-bottom: 3px;">Dashboard Estratégico</strong>
+                    <small style="font-weight:400; opacity:0.85; font-size:0.8rem;">Curvas S, KPIs y Exportaciones</small>
+                </div>
+            </button>
+        </div>
+    </div>
+
+    <div id="app-mapa" style="display: none;">
+        <nav class="toolbar">
+            <div class="tool active" data-task="H" onclick="setTask('H', this)" style="--c: #ffeb3b">Hinca</div>
+            <div class="tool" data-task="P" onclick="setTask('P', this)" style="--c: #2196f3">Piruletas</div>
+            <div class="tool" data-task="T" onclick="setTask('T', this)" style="--c: #9c27b0">Torque</div>
+            <div class="tool" data-task="O" onclick="setTask('O', this)" style="--c: #00bcd4">Omegas</div>
+            <div class="tool" data-task="M" onclick="setTask('M', this)" style="--c: #4caf50">Módulos</div>
+            <div class="tool" data-task="NA" onclick="setTask('NA', this)" style="--c: #fff; border: 1px solid #ccc;">Borrar</div>
+        </nav>
+
+        <div class="filter-bar">
+            <select id="select-arco" onchange="actualizarBloques()" style="font-weight: bold;"></select>
+            <select id="select-block" onchange="renderMatrix()"></select>
+        </div>
+
+        <main id="matrix-container">
+            <div class="empty-state">Pulsa "Cargar Listados" en la cabecera para empezar.</div>
+        </main>
+
+        <div id="summary-panel" class="summary-panel">
+            <h3>Progreso: <span id="summary-block-name">-</span></h3>
+            <div class="summary-grid">
+                <div class="sum-item" style="border-left-color: #ffeb3b"><span>Hincas</span><strong id="sum-H">0/0</strong></div>
+                <div class="sum-item" style="border-left-color: #2196f3"><span>Piruletas</span><strong id="sum-P">0/0</strong></div>
+                <div class="sum-item" style="border-left-color: #9c27b0"><span>Torque (Filas)</span><strong id="sum-T">0/0</strong></div>
+                <div class="sum-item" style="border-left-color: #00bcd4"><span>Omegas (Filas)</span><strong id="sum-O">0/0</strong></div>
+                <div class="sum-item" style="border-left-color: #4caf50"><span>Módulos (Filas)</span><strong id="sum-M">0/0</strong></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="prod-app.js"></script>
+    <script>
+        function abrirMapa() {
+            document.getElementById('portada').style.display = 'none';
+            document.getElementById('app-mapa').style.display = 'block';
+            document.getElementById('header-nav').style.display = 'flex';
+        }
+        
+        function irInicio() {
+            history.pushState("", document.title, window.location.pathname + window.location.search);
+            document.getElementById('app-mapa').style.display = 'none';
+            document.getElementById('header-nav').style.display = 'none';
+            document.getElementById('portada').style.display = 'flex';
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            if (window.location.hash === '#mapa') {
+                abrirMapa();
+            }
+        });
+    </script>
+</body>
+</html>
