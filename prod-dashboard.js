@@ -4,6 +4,13 @@ const levels = {'': 0, 'H': 1, 'P': 2, 'T': 3, 'O': 4, 'M': 5};
 const colors = { hinca: '#ffeb3b', posthead: '#2196f3', torque: '#9c27b0', omega: '#00bcd4', modulo: '#4caf50' };
 
 let charts = {};
+
+function safeDestroy(chart) {
+    if (chart && typeof chart.destroy === 'function') {
+        try { chart.destroy(); } catch (e) { console.warn('Chart destroy error:', e); }
+    }
+    return null;
+}
 let PARQUE_MASTER = {};
 let HISTORIAL_PROD = {};
 
@@ -43,11 +50,18 @@ async function initDashboard() {
     document.getElementById('date-to').value = hoyDate.toISOString().split('T')[0];
     document.getElementById('date-from').value = weekAgo.toISOString().split('T')[0];
 
+    document.getElementById('select-arco-dash').addEventListener('change', refreshDetalle);
+
     await construirCache();
     applyFilters();
 }
 
+function resetCache() {
+    DB_CACHE = { totales: { h:0, p:0, t:0, o:0, m:0 }, fechas: {} };
+}
+
 async function construirCache() {
+    resetCache();
     for (let id in PARQUE_MASTER) {
         let tr = PARQUE_MASTER[id];
         for (let fN in tr.filas) {
@@ -151,7 +165,7 @@ function applyFilters() {
             <div class="card">
                 <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 15px;">
                     <h2 style="margin:0; border:none; padding:0;">Curva S (Acumulado)</h2>
-                    <select id="select-fase-scurve" onchange="updateSCurve()" style="padding: 5px; border-radius: 4px; border: 1px solid #ccc; font-size: 13px; font-weight: bold; color: #005596; cursor: pointer;">
+                    <select id="select-fase-scurve" style="padding: 5px; border-radius: 4px; border: 1px solid #ccc; font-size: 13px; font-weight: bold; color: #005596; cursor: pointer;">
                         <option value="h">Hincado</option><option value="p">Piruletas</option><option value="t">Torque Tubes</option><option value="o">Omegas</option><option value="m">Módulos</option>
                     </select>
                 </div>
@@ -187,7 +201,9 @@ function applyFilters() {
         </div>
     `;
 
-    if (charts.daily) charts.daily.destroy();
+    document.getElementById('select-fase-scurve').addEventListener('change', updateSCurve);
+
+    charts.daily = safeDestroy(charts.daily);
     charts.daily = new Chart(document.getElementById('chartDaily'), {
         type: 'bar',
         data: {
@@ -203,7 +219,7 @@ function applyFilters() {
         options: { responsive: true, maintainAspectRatio: false }
     });
 
-    if (charts.globalRel) charts.globalRel.destroy();
+    charts.globalRel = safeDestroy(charts.globalRel);
     charts.globalRel = new Chart(document.getElementById('chartGlobalRelative'), {
         type: 'bar',
         data: {
@@ -219,7 +235,7 @@ function applyFilters() {
     updateSCurve();
 }
 
-window.updateSCurve = function() {
+function updateSCurve() {
     const fase = document.getElementById('select-fase-scurve').value;
     const dataMap = {
         'h': { label: 'Acumulado Hincas', data: window.chartDataAccStore.h, color: 'rgba(255, 235, 59, 0.4)', border: '#fbc02d' },
@@ -229,7 +245,7 @@ window.updateSCurve = function() {
         'm': { label: 'Acumulado Módulos', data: window.chartDataAccStore.m, color: 'rgba(76, 175, 80, 0.4)', border: '#388e3c' }
     };
     
-    if (charts.scurve) charts.scurve.destroy();
+    charts.scurve = safeDestroy(charts.scurve);
     charts.scurve = new Chart(document.getElementById('chartSCurve'), {
         type: 'line',
         data: {
@@ -309,7 +325,7 @@ async function refreshDetalle() {
             <div class="card">
                 <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 15px;">
                     <h2 style="margin:0; border:none; padding:0;">Producción por Bloque (%)</h2>
-                    <select id="select-fase-bloques" onchange="updateBlocksChart()" style="padding: 5px; border-radius: 4px; border: 1px solid #ccc; font-size: 13px; font-weight: bold; color: #005596; cursor: pointer;">
+                    <select id="select-fase-bloques" style="padding: 5px; border-radius: 4px; border: 1px solid #ccc; font-size: 13px; font-weight: bold; color: #005596; cursor: pointer;">
                         <option value="h">Hincado</option><option value="p">Piruletas</option><option value="t">Torque Tubes</option><option value="o">Omegas</option><option value="m">Módulos</option>
                     </select>
                 </div>
@@ -330,8 +346,10 @@ async function refreshDetalle() {
         </div>
     `;
 
+    document.getElementById('select-fase-bloques').addEventListener('change', updateBlocksChart);
+
     // Gráfico de Barras Diarias del Arco
-    if (charts.dailyArco) charts.dailyArco.destroy();
+    charts.dailyArco = safeDestroy(charts.dailyArco);
     charts.dailyArco = new Chart(document.getElementById('chartDailyArco'), {
         type: 'bar',
         data: {
@@ -348,7 +366,7 @@ async function refreshDetalle() {
     });
 
     // Gráfico de Avance Relativo del Arco
-    if (charts.arcGlobal) charts.arcGlobal.destroy();
+    charts.arcGlobal = safeDestroy(charts.arcGlobal);
     charts.arcGlobal = new Chart(document.getElementById('chartGlobalArco'), {
         type: 'bar',
         data: {
@@ -364,7 +382,7 @@ async function refreshDetalle() {
     updateBlocksChart();
 }
 
-window.updateBlocksChart = function() {
+function updateBlocksChart() {
     const fase = document.getElementById('select-fase-bloques').value;
     const stats = window.statsArcoStore;
     const bLabels = Object.keys(stats.bloques).sort();
@@ -379,7 +397,7 @@ window.updateBlocksChart = function() {
 
     const dataArr = bLabels.map(l => calcPerc(stats.bloques[l][config.key], stats.bloques[l][config.total]));
 
-    if (charts.arcBlocks) charts.arcBlocks.destroy();
+    charts.arcBlocks = safeDestroy(charts.arcBlocks);
     charts.arcBlocks = new Chart(document.getElementById('chartBloques'), {
         type: 'bar', // Cambiado a barras para comparar bloques de forma más clara
         data: {

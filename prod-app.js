@@ -59,7 +59,8 @@ function procesarDatosJSON(data) {
 
         let arcoId = 'S/A';
         const cleanId = tIdStr.replace(/\s+/g, ''); 
-        if (cleanId.includes('ARCO1') || cleanId.includes('ARC1')) arcoId = 'ARC1'; else if (cleanId.includes('ARCO2') || cleanId.includes('ARC2')) arcoId = 'ARC2'; else if (cleanId.includes('ARCO3') || cleanId.includes('ARC3')) arcoId = 'ARC3'; else if (cleanId.includes('ARCO4') || cleanId.includes('ARC4')) arcoId = 'ARC4'; else if (cleanId.includes('ARCO5') || cleanId.includes('ARC5')) arcoId = 'ARC5';
+        const match = cleanId.match(/ARCO(\d)|ARC(\d)/);
+        if (match) arcoId = `ARC${match[1] || match[2]}`;
 
         if (!arcoEnEsteArchivo && arcoId !== 'S/A') arcoEnEsteArchivo = arcoId;
         const x = parseCoord(rawX), y = parseCoord(rawY);
@@ -81,7 +82,12 @@ function actualizarSelectores(arcoPreferido) {
     Object.values(PARQUE_MASTER).forEach(tr => { if(tr.arco) arcos.add(tr.arco); });
     const selectArco = document.getElementById('select-arco');
     const valorAntes = selectArco.value;
-    if (arcos.size === 0) { selectArco.innerHTML = '<option>Carga un Excel...</option>'; return; }
+    if (arcos.size === 0) {
+        selectArco.innerHTML = '<option>Carga un Excel...</option>';
+        document.getElementById('select-block').innerHTML = '';
+        document.getElementById('matrix-container').innerHTML = '<div class="empty-state">No hay datos cargados.</div>';
+        return;
+    }
     selectArco.innerHTML = Array.from(arcos).sort().map(a => `<option value="${a}">${a === 'S/A' ? 'NO IDENTIFICADO' : a}</option>`).join('');
     if (arcoPreferido && arcos.has(arcoPreferido)) selectArco.value = arcoPreferido; else if (valorAntes && arcos.has(valorAntes)) selectArco.value = valorAntes;
     actualizarBloques();
@@ -111,20 +117,27 @@ async function renderMatrix() {
     });
     
     const rX = (gMaxX - gMinX) || 1; const rY = (gMaxY - gMinY) || 1;
-    const ZX = 8, ZY = 6, M = 300; 
-    let html = `<div class="map-canvas" style="min-width: ${(rX * ZX) + (M * 2)}px; min-height: ${(rY * ZY) + (M * 2)}px;">`;
+    const SCALE_X = 8, SCALE_Y = 6, MARGIN = 300;
+    function escapeHtml(str) {
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+    let html = `<div class="map-canvas" style="min-width: ${(rX * SCALE_X) + (MARGIN * 2)}px; min-height: ${(rY * SCALE_Y) + (MARGIN * 2)}px;">`;
     
     for (let id of ids) {
         const tr = PARQUE_MASTER[id];
-        const pxX = (((tr.minX + tr.maxX) / 2 - gMinX) * ZX) + M;
-        const pxY = ((gMaxY - tr.maxY) * ZY) + M;
-        let pxH = ((tr.maxY - tr.minY) * ZY); if (pxH < 40) pxH = 40; 
+        const pxX = (((tr.minX + tr.maxX) / 2 - gMinX) * SCALE_X) + MARGIN;
+        const pxY = ((gMaxY - tr.maxY) * SCALE_Y) + MARGIN;
+        let pxH = ((tr.maxY - tr.minY) * SCALE_Y); if (pxH < 40) pxH = 40; 
         const filas = Object.keys(tr.filas).sort((a,b) => a-b);
         const esM = filas.length === 1;
-        let wS = !esM ? `width: ${((tr.maxX - tr.minX) * ZX) + 22}px; justify-content: space-between;` : `justify-content: center;`;
+        let wS = !esM ? `width: ${((tr.maxX - tr.minX) * SCALE_X) + 22}px; justify-content: space-between;` : `justify-content: center;`;
         
         html += `<div class="prod-card map-card" style="left: ${pxX}px; top: ${pxY}px; height: ${pxH}px; ${wS}">`;
-        html += `<div class="tracker-title" style="cursor:pointer;" onclick="paintTracker('${id}')" title="Pintar tracker completo">${tr.name.split('-').slice(-2).join('-')}</div>`;
+        const safeTrackerId = id.replace(/'/g, "\\'");
+        const safeName = escapeHtml(tr.name.split('-').slice(-2).join('-'));
+        html += `<div class="tracker-title" style="cursor:pointer;" onclick="paintTracker('${safeTrackerId}')" title="Pintar tracker completo">${safeName}</div>`;
         for (let fN of filas) {
             const f = tr.filas[fN];
             let tT = fN == 2 ? 'MOT' : 'GEM'; let cT = fN == 2 ? 'motora' : 'gemela'; if (esM) { tT = 'MONO'; cT = 'mono'; }
@@ -143,9 +156,10 @@ async function renderMatrix() {
     actualizarContadores();
 }
 
+const STATUS_COLORS = { 'H': '#ffeb3b', 'P': '#2196f3', 'T': '#9c27b0', 'O': '#00bcd4', 'M': '#4caf50', '': '#fff' };
+
 function getStyleByStatus(s) {
-    const c = { 'H': '#ffeb3b', 'P': '#2196f3', 'T': '#9c27b0', 'O': '#00bcd4', 'M': '#4caf50', '': '#fff' };
-    return c[s] || '#fff';
+    return STATUS_COLORS[s] || '#fff';
 }
 
 async function paint(id) {
@@ -171,8 +185,6 @@ async function paint(id) {
     cell.style.backgroundColor = getStyleByStatus(newTask);
     cell.style.color = newTask === '' ? 'transparent' : '#333';
     
-    // GUARDADO DUAL
-    await localforage.setItem(id, dataToSave); 
     if (newTask === '') {
         delete HISTORIAL_PROD[id];
     } else {
@@ -223,10 +235,24 @@ async function paintRow(trackerId, filaNum) {
     if (!tr || !tr.filas[filaNum]) return;
     
     if (newTask === '') {
-        if (!confirm(`⚠️ ¿Deseas borrar toda la fila?`)) return;
+        if (!confirm('⚠️ ¿Deseas borrar toda la fila?')) return;
     }
 
     const f = tr.filas[filaNum];
+    const lv = {'': 0, 'H': 1, 'P': 2, 'T': 3, 'O': 4, 'M': 5};
+    const newLevel = lv[newTask];
+
+    for (let h = 1; h <= f.hincas; h++) {
+        const hId = `${trackerId}-F${filaNum}-H${h}`;
+        const raw = HISTORIAL_PROD[hId];
+        const currentStatus = (raw && typeof raw === 'object') ? (raw.estado || '') : (raw || '');
+        const currentLevel = lv[currentStatus] || 0;
+        if (newLevel < currentLevel && currentStatus !== '') {
+            if (!confirm('⚠️ ¿Deseas degradar esta fila? Se perderán fechas de producción.')) return;
+            break;
+        }
+    }
+
     const hoy = new Date().toISOString().split('T')[0]; 
     
     for (let h = 1; h <= f.hincas; h++) {
@@ -234,17 +260,12 @@ async function paintRow(trackerId, filaNum) {
         const cell = document.getElementById(hId);
         if (!cell) continue;
 
-        const dataToSave = { estado: newTask, fecha: (newTask === '') ? null : hoy };
-        
-        // Actualizar visual
         cell.innerText = newTask; 
         cell.style.backgroundColor = getStyleByStatus(newTask);
         cell.style.color = newTask === '' ? 'transparent' : '#333';
         
-        // Actualizar datos
-        await localforage.setItem(hId, dataToSave);
         if (newTask === '') delete HISTORIAL_PROD[hId];
-        else HISTORIAL_PROD[hId] = dataToSave;
+        else HISTORIAL_PROD[hId] = { estado: newTask, fecha: hoy };
     }
     
     await localforage.setItem('HISTORIAL_PROD', HISTORIAL_PROD);
@@ -256,7 +277,24 @@ async function paintTracker(trackerId) {
     const tr = PARQUE_MASTER[trackerId];
     if (!tr) return;
     
-    
+    const lv = {'': 0, 'H': 1, 'P': 2, 'T': 3, 'O': 4, 'M': 5};
+    const newLevel = lv[newTask];
+
+    checkDegradation:
+    for (let fN in tr.filas) {
+        const f = tr.filas[fN];
+        for (let h = 1; h <= f.hincas; h++) {
+            const hId = `${trackerId}-F${fN}-H${h}`;
+            const raw = HISTORIAL_PROD[hId];
+            const currentStatus = (raw && typeof raw === 'object') ? (raw.estado || '') : (raw || '');
+            const currentLevel = lv[currentStatus] || 0;
+            if (newLevel < currentLevel && currentStatus !== '') {
+                if (!confirm('⚠️ ¿Deseas degradar este tracker? Se perderán fechas de producción.')) return;
+                break checkDegradation;
+            }
+        }
+    }
+
     const hoy = new Date().toISOString().split('T')[0]; 
     
     for (let fN in tr.filas) {
@@ -266,17 +304,12 @@ async function paintTracker(trackerId) {
             const cell = document.getElementById(hId);
             if (!cell) continue;
 
-            const dataToSave = { estado: newTask, fecha: (newTask === '') ? null : hoy };
-            
-            // Actualizar visual
             cell.innerText = newTask; 
             cell.style.backgroundColor = getStyleByStatus(newTask);
             cell.style.color = newTask === '' ? 'transparent' : '#333';
             
-            // Actualizar datos
-            await localforage.setItem(hId, dataToSave);
             if (newTask === '') delete HISTORIAL_PROD[hId];
-            else HISTORIAL_PROD[hId] = dataToSave;
+            else HISTORIAL_PROD[hId] = { estado: newTask, fecha: hoy };
         }
     }
     
