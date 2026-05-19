@@ -1,8 +1,18 @@
 let currentTask = 'H';
 let PARQUE_MASTER = {}; 
-let HISTORIAL_PROD = {}; // NUEVO: El índice maestro para el dashboard
+let HISTORIAL_PROD = {};
 
 localforage.config({ name: 'SIGMA_PROD_V1', storeName: 'produccion_hincas' });
+
+function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
+function escapeJsStr(str) {
+    return String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
 
 function setTask(task, el) {
     currentTask = task;
@@ -118,11 +128,6 @@ async function renderMatrix() {
     
     const rX = (gMaxX - gMinX) || 1; const rY = (gMaxY - gMinY) || 1;
     const SCALE_X = 8, SCALE_Y = 6, MARGIN = 300;
-    function escapeHtml(str) {
-        const div = document.createElement('div');
-        div.textContent = str;
-        return div.innerHTML;
-    }
     let html = `<div class="map-canvas" style="min-width: ${(rX * SCALE_X) + (MARGIN * 2)}px; min-height: ${(rY * SCALE_Y) + (MARGIN * 2)}px;">`;
     
     for (let id of ids) {
@@ -135,18 +140,19 @@ async function renderMatrix() {
         let wS = !esM ? `width: ${((tr.maxX - tr.minX) * SCALE_X) + 22}px; justify-content: space-between;` : `justify-content: center;`;
         
         html += `<div class="prod-card map-card" style="left: ${pxX}px; top: ${pxY}px; height: ${pxH}px; ${wS}">`;
-        const safeTrackerId = id.replace(/'/g, "\\'");
+        const safeId = escapeJsStr(id);
         const safeName = escapeHtml(tr.name.split('-').slice(-2).join('-'));
-        html += `<div class="tracker-title" style="cursor:pointer;" onclick="paintTracker('${safeTrackerId}')" title="Pintar tracker completo">${safeName}</div>`;
+        html += `<div class="tracker-title" style="cursor:pointer;" onclick="paintTracker('${safeId}')" title="Pintar tracker completo">${safeName}</div>`;
         for (let fN of filas) {
             const f = tr.filas[fN];
             let tT = fN == 2 ? 'MOT' : 'GEM'; let cT = fN == 2 ? 'motora' : 'gemela'; if (esM) { tT = 'MONO'; cT = 'mono'; }
-            html += `<div class="row-container"><div class="row-tag ${cT}" style="cursor:pointer;" onclick="paintRow('${id}', '${fN}')" title="Pintar fila completa">${tT}</div><div class="cells-grid">`;
+            html += `<div class="row-container"><div class="row-tag ${cT}" style="cursor:pointer;" onclick="paintRow('${safeId}', '${fN}')" title="Pintar fila completa">${tT}</div><div class="cells-grid">`;
             for (let h = 1; h <= f.hincas; h++) {
                 const hId = `${id}-F${fN}-H${h}`;
-                const rawData = HISTORIAL_PROD[hId]; // NUEVO: Lectura instantánea en memoria
+                const safeHId = escapeJsStr(hId);
+                const rawData = HISTORIAL_PROD[hId];
                 const s = (rawData && typeof rawData === 'object') ? (rawData.estado || '') : (rawData || '');
-                html += `<div class="cell" id="${hId}" onclick="paint('${hId}')" style="background-color:${getStyleByStatus(s)}; color: ${s==='' ? 'transparent' : '#333'};">${s}</div>`;
+                html += `<div class="cell" id="${safeHId}" onclick="paint('${safeHId}')" style="background-color:${getStyleByStatus(s)}; color: ${s==='' ? 'transparent' : '#333'};">${s}</div>`;
             }
             html += `</div></div>`;
         }
@@ -260,12 +266,19 @@ async function paintRow(trackerId, filaNum) {
         const cell = document.getElementById(hId);
         if (!cell) continue;
 
+        const raw = HISTORIAL_PROD[hId];
+        const currentStatus = (raw && typeof raw === 'object') ? (raw.estado || '') : (raw || '');
+        const currentDate = (raw && typeof raw === 'object') ? raw.fecha : null;
+
         cell.innerText = newTask; 
         cell.style.backgroundColor = getStyleByStatus(newTask);
         cell.style.color = newTask === '' ? 'transparent' : '#333';
         
-        if (newTask === '') delete HISTORIAL_PROD[hId];
-        else HISTORIAL_PROD[hId] = { estado: newTask, fecha: hoy };
+        if (newTask === '') {
+            delete HISTORIAL_PROD[hId];
+        } else {
+            HISTORIAL_PROD[hId] = { estado: newTask, fecha: (newTask === currentStatus ? (currentDate || hoy) : hoy) };
+        }
     }
     
     await localforage.setItem('HISTORIAL_PROD', HISTORIAL_PROD);
@@ -304,12 +317,19 @@ async function paintTracker(trackerId) {
             const cell = document.getElementById(hId);
             if (!cell) continue;
 
+            const raw = HISTORIAL_PROD[hId];
+            const currentStatus = (raw && typeof raw === 'object') ? (raw.estado || '') : (raw || '');
+            const currentDate = (raw && typeof raw === 'object') ? raw.fecha : null;
+
             cell.innerText = newTask; 
             cell.style.backgroundColor = getStyleByStatus(newTask);
             cell.style.color = newTask === '' ? 'transparent' : '#333';
             
-            if (newTask === '') delete HISTORIAL_PROD[hId];
-            else HISTORIAL_PROD[hId] = { estado: newTask, fecha: hoy };
+            if (newTask === '') {
+                delete HISTORIAL_PROD[hId];
+            } else {
+                HISTORIAL_PROD[hId] = { estado: newTask, fecha: (newTask === currentStatus ? (currentDate || hoy) : hoy) };
+            }
         }
     }
     

@@ -21,12 +21,18 @@ window.datesInRangeStore = null;
 window.statsArcoStore = null; // Guardamos los datos del arco seleccionado
 
 function switchTab(tabId, el) {
+    charts.daily = safeDestroy(charts.daily);
+    charts.globalRel = safeDestroy(charts.globalRel);
+    charts.scurve = safeDestroy(charts.scurve);
+    charts.dailyArco = safeDestroy(charts.dailyArco);
+    charts.arcGlobal = safeDestroy(charts.arcGlobal);
+    charts.arcBlocks = safeDestroy(charts.arcBlocks);
+
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
     el.classList.add('active');
     document.getElementById('view-' + tabId).classList.add('active');
     
-    // El filtro de fechas ahora aplica a ambas pestañas
     if (tabId === 'detalle') refreshDetalle();
     else if (tabId === 'global') applyFilters();
 }
