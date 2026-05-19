@@ -57,6 +57,12 @@ async function importarArchivos(input) {
 
 const parseCoord = (val) => { if(!val) return 0; return parseFloat(String(val).replace(',', '.')); };
 
+function detectarArco(id) {
+    const clean = id.replace(/\s+/g, '');
+    const match = clean.match(/ARCO(\d)|ARC(\d)/);
+    return match ? `ARC${match[1] || match[2]}` : 'S/A';
+}
+
 function procesarDatosJSON(data) {
     let arcoEnEsteArchivo = '';
     data.forEach(rawRow => {
@@ -67,10 +73,7 @@ function procesarDatosJSON(data) {
         const tIdStr = String(tId).trim().toUpperCase();
         if (tIdStr === '') return;
 
-        let arcoId = 'S/A';
-        const cleanId = tIdStr.replace(/\s+/g, ''); 
-        const match = cleanId.match(/ARCO(\d)|ARC(\d)/);
-        if (match) arcoId = `ARC${match[1] || match[2]}`;
+        const arcoId = detectarArco(tIdStr);
 
         if (!arcoEnEsteArchivo && arcoId !== 'S/A') arcoEnEsteArchivo = arcoId;
         const x = parseCoord(rawX), y = parseCoord(rawY);
