@@ -306,56 +306,75 @@ function getMigratedData(raw) {
     return dataToSave;
 }
 
-async function paint(id) {
-    const cell = document.getElementById(id);
-    const newTask = currentTask === 'NA' ? '' : currentTask;
-    const hoy = getFechaProduccion(); // APLICACIÓN DEL NUEVO SELECTOR
-    
-    let raw = HISTORIAL_PROD[id];
-    let dataToSave = getMigratedData(raw);
-    const currentStatus = dataToSave.estado || '';
-    
-    const newLvlIdx = newTask === '' ? -1 : LEVELS.indexOf(newTask);
-    const curLvlIdx = currentStatus === '' ? -1 : LEVELS.indexOf(currentStatus);
+function getLevelIndex(status) {
+    return (status === '' || status == null) ? -1 : LEVELS.indexOf(status);
+}
 
-    if (newLvlIdx < curLvlIdx && currentStatus !== '') {
-        if (!confirm(`⚠️ ¿Deseas degradar o borrar esta unidad? Se perderán las fechas registradas superiores.`)) return;
-        for(let i = newLvlIdx + 1; i < LEVELS.length; i++) delete dataToSave[LEVELS[i]];
-        dataToSave.estado = newTask;
+function degradeData(data, newLvlIdx) {
+    for (let i = newLvlIdx + 1; i < LEVELS.length; i++) {
+        delete data[LEVELS[i]];
+    }
+    return data;
+}
+
+function applyToCell(id, newTask, newLvlIdx, hoy) {
+    const cell = document.getElementById(id);
+    if (!cell) return;
+
+    let raw = HISTORIAL_PROD[id];
+    let data = getMigratedData(raw);
+    const curLvlIdx = getLevelIndex(data.estado || '');
+
+    if (newLvlIdx < curLvlIdx) {
+        degradeData(data, newLvlIdx);
     } else if (newTask !== '') {
-        for(let i = 0; i <= newLvlIdx; i++) {
-            if (!dataToSave[LEVELS[i]]) dataToSave[LEVELS[i]] = hoy;
+        for (let i = 0; i <= newLvlIdx; i++) {
+            if (!data[LEVELS[i]]) data[LEVELS[i]] = hoy;
         }
-        dataToSave.estado = newTask;
     }
 
-    cell.innerText = newTask; 
+    data.estado = newTask;
+
+    cell.innerText = newTask;
     cell.style.backgroundColor = getStyleByStatus(newTask);
     cell.style.color = newTask === '' ? 'transparent' : '#333';
-    
+
     if (newTask === '') delete HISTORIAL_PROD[id];
-    else HISTORIAL_PROD[id] = dataToSave;
-    
+    else HISTORIAL_PROD[id] = data;
+}
+
+async function paint(id) {
+    const newTask = currentTask === 'NA' ? '' : currentTask;
+    const newLvlIdx = getLevelIndex(newTask);
+    const hoy = getFechaProduccion();
+
+    let raw = HISTORIAL_PROD[id];
+    let data = getMigratedData(raw);
+    const curLvlIdx = getLevelIndex(data.estado || '');
+
+    if (newLvlIdx < curLvlIdx && data.estado) {
+        if (!confirm(`⚠️ ¿Deseas degradar o borrar esta unidad? Se perderán las fechas registradas superiores.`)) return;
+    }
+
+    applyToCell(id, newTask, newLvlIdx, hoy);
+
     try { await localforage.setItem('HISTORIAL_PROD', HISTORIAL_PROD); } catch (e) { console.error("Error al guardar historial:", e); }
     actualizarContadores();
 }
 
 async function paintRow(trackerId, filaNum) {
     const newTask = currentTask === 'NA' ? '' : currentTask;
+    const newLvlIdx = getLevelIndex(newTask);
+    const hoy = getFechaProduccion();
     const tr = PARQUE_MASTER[trackerId];
     if (!tr || !tr.filas[filaNum]) return;
-    
-    const f = tr.filas[filaNum];
-    const newLvlIdx = newTask === '' ? -1 : LEVELS.indexOf(newTask);
-    const hoy = getFechaProduccion(); // APLICACIÓN DEL NUEVO SELECTOR
 
+    const f = tr.filas[filaNum];
     let needsConfirm = false;
     for (let h = 1; h <= f.hincas; h++) {
-        const hId = `${trackerId}-F${filaNum}-H${h}`;
-        const raw = HISTORIAL_PROD[hId];
-        const st = (raw && typeof raw === 'object') ? (raw.estado || '') : (raw || '');
-        const curIdx = st === '' ? -1 : LEVELS.indexOf(st);
-        if (newLvlIdx < curIdx && st !== '') {
+        const raw = HISTORIAL_PROD[`${trackerId}-F${filaNum}-H${h}`];
+        const data = getMigratedData(raw);
+        if (newLvlIdx < getLevelIndex(data.estado || '') && data.estado) {
             needsConfirm = true;
             break;
         }
@@ -365,52 +384,29 @@ async function paintRow(trackerId, filaNum) {
     }
 
     for (let h = 1; h <= f.hincas; h++) {
-        const hId = `${trackerId}-F${filaNum}-H${h}`;
-        const cell = document.getElementById(hId);
-        if (!cell) continue;
-
-        let raw = HISTORIAL_PROD[hId];
-        let dataToSave = getMigratedData(raw);
-
-        if (newLvlIdx < (dataToSave.estado ? LEVELS.indexOf(dataToSave.estado) : -1)) {
-            for(let i = newLvlIdx + 1; i < LEVELS.length; i++) delete dataToSave[LEVELS[i]];
-        } else if (newTask !== '') {
-            for(let i = 0; i <= newLvlIdx; i++) {
-                if (!dataToSave[LEVELS[i]]) dataToSave[LEVELS[i]] = hoy;
-            }
-        }
-        dataToSave.estado = newTask;
-
-        cell.innerText = newTask; 
-        cell.style.backgroundColor = getStyleByStatus(newTask);
-        cell.style.color = newTask === '' ? 'transparent' : '#333';
-        
-        if (newTask === '') delete HISTORIAL_PROD[hId];
-        else HISTORIAL_PROD[hId] = dataToSave;
+        applyToCell(`${trackerId}-F${filaNum}-H${h}`, newTask, newLvlIdx, hoy);
     }
-    
+
     try { await localforage.setItem('HISTORIAL_PROD', HISTORIAL_PROD); } catch (e) { console.error("Error al guardar historial:", e); }
     actualizarContadores();
 }
 
 async function paintTracker(trackerId) {
     const newTask = currentTask === 'NA' ? '' : currentTask;
+    const newLvlIdx = getLevelIndex(newTask);
+    const hoy = getFechaProduccion();
     const tr = PARQUE_MASTER[trackerId];
     if (!tr) return;
-    
-    const newLvlIdx = newTask === '' ? -1 : LEVELS.indexOf(newTask);
-    const hoy = getFechaProduccion(); // APLICACIÓN DEL NUEVO SELECTOR
 
     let needsConfirm = false;
-    checkDegradation:
+    outer:
     for (let fN in tr.filas) {
         for (let h = 1; h <= tr.filas[fN].hincas; h++) {
             const raw = HISTORIAL_PROD[`${trackerId}-F${fN}-H${h}`];
-            const st = (raw && typeof raw === 'object') ? (raw.estado || '') : (raw || '');
-            const curIdx = st === '' ? -1 : LEVELS.indexOf(st);
-            if (newLvlIdx < curIdx && st !== '') {
+            const data = getMigratedData(raw);
+            if (newLvlIdx < getLevelIndex(data.estado || '') && data.estado) {
                 needsConfirm = true;
-                break checkDegradation;
+                break outer;
             }
         }
     }
@@ -420,31 +416,10 @@ async function paintTracker(trackerId) {
 
     for (let fN in tr.filas) {
         for (let h = 1; h <= tr.filas[fN].hincas; h++) {
-            const hId = `${trackerId}-F${fN}-H${h}`;
-            const cell = document.getElementById(hId);
-            if (!cell) continue;
-
-            let raw = HISTORIAL_PROD[hId];
-            let dataToSave = getMigratedData(raw);
-
-            if (newLvlIdx < (dataToSave.estado ? LEVELS.indexOf(dataToSave.estado) : -1)) {
-                for(let i = newLvlIdx + 1; i < LEVELS.length; i++) delete dataToSave[LEVELS[i]];
-            } else if (newTask !== '') {
-                for(let i = 0; i <= newLvlIdx; i++) {
-                    if (!dataToSave[LEVELS[i]]) dataToSave[LEVELS[i]] = hoy;
-                }
-            }
-            dataToSave.estado = newTask;
-
-            cell.innerText = newTask; 
-            cell.style.backgroundColor = getStyleByStatus(newTask);
-            cell.style.color = newTask === '' ? 'transparent' : '#333';
-            
-            if (newTask === '') delete HISTORIAL_PROD[hId];
-            else HISTORIAL_PROD[hId] = dataToSave;
+            applyToCell(`${trackerId}-F${fN}-H${h}`, newTask, newLvlIdx, hoy);
         }
     }
-    
+
     try { await localforage.setItem('HISTORIAL_PROD', HISTORIAL_PROD); } catch (e) { console.error("Error al guardar historial:", e); }
     actualizarContadores();
 }
