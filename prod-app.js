@@ -7,6 +7,8 @@ let HISTORIAL_CAJAS = {};
 
 localforage.config({ name: 'SIGMA_PROD_V1', storeName: 'produccion_hincas' });
 
+const LEVELS = ['H', 'P', 'T', 'O', 'M'];
+
 function escapeHtml(str) {
     const div = document.createElement('div');
     div.textContent = str;
@@ -67,9 +69,13 @@ async function importarArchivos(input) {
         });
     }
 
-    await localforage.setItem('PARQUE_MASTER_DATA', PARQUE_MASTER);
-    await localforage.setItem('PARQUE_ESTACIONES_DATA', PARQUE_ESTACIONES);
-    await localforage.setItem('PARQUE_CAJAS_DATA', PARQUE_CAJAS);
+    try {
+        await localforage.setItem('PARQUE_MASTER_DATA', PARQUE_MASTER);
+        await localforage.setItem('PARQUE_ESTACIONES_DATA', PARQUE_ESTACIONES);
+        await localforage.setItem('PARQUE_CAJAS_DATA', PARQUE_CAJAS);
+    } catch (e) {
+        console.error("Error al guardar en IndexedDB:", e);
+    }
     if (btn) { btn.innerText = `✅ ¡Cargado!`; setTimeout(() => btn.innerText = "📂 Cargar Listados", 2000); }
     input.value = '';
     actualizarSelectores(ultimoArcoDetectado);
@@ -135,7 +141,7 @@ function procesarDatosJSON(data) {
         }
 
         const block = row['BLOQUE'] || 'S/B', filaNum = row['FILA'], hincaIndex = row['HINCA'];
-        if (!filaNum || !hincaIndex) return;
+        if (filaNum === undefined || filaNum === null || hincaIndex === undefined || hincaIndex === null) return;
         const arcoId = detectarArco(tIdStr);
         if (!arcoEnEsteArchivo && arcoId !== 'S/A') arcoEnEsteArchivo = arcoId;
 
@@ -210,8 +216,7 @@ async function renderMatrix() {
         const pxX = (((sb.minX + sb.maxX) / 2 - gMinX) * SCALE_X) + MARGIN;
         const pxY = ((gMaxY - sb.maxY) * SCALE_Y) + MARGIN;
         let wS = 30, pxH = 18; 
-        let checks = HISTORIAL_CAJAS[id] || {}; let count = 0;
-        if(checks['localizacion']) count++; if(checks['soportacion']) count++; if(checks['fusibles']) count++; if(checks['con_strings']) count++; if(checks['con_bus']) count++; if(checks['limpieza']) count++;
+        let checks = HISTORIAL_CAJAS[id] || {}; let count = contarChecks(checks);
         let colorClass = 'sb-red'; if(count === 6) colorClass = 'sb-green'; else if(count > 0) colorClass = 'sb-orange';
         const numCaja = sb.name.split('-').slice(2).join('-').split('_')[0];
         const safeId = escapeJsStr(id);
@@ -273,19 +278,24 @@ async function toggleCheckCaja(id, item, isChecked) {
     } else {
         delete HISTORIAL_CAJAS[id][item];
     }
-    await localforage.setItem('HISTORIAL_CAJAS', HISTORIAL_CAJAS);
+    try { await localforage.setItem('HISTORIAL_CAJAS', HISTORIAL_CAJAS); } catch (e) { console.error("Error al guardar historial de cajas:", e); }
 }
 
 const STATUS_COLORS = { 'H': '#ffeb3b', 'P': '#2196f3', 'T': '#9c27b0', 'O': '#00bcd4', 'M': '#4caf50', '': '#fff' };
 function getStyleByStatus(s) { return STATUS_COLORS[s] || '#fff'; }
 
+function contarChecks(checks) {
+    let count = 0;
+    if(checks['localizacion']) count++; if(checks['soportacion']) count++; if(checks['fusibles']) count++; if(checks['con_strings']) count++; if(checks['con_bus']) count++; if(checks['limpieza']) count++;
+    return count;
+}
+
 function getMigratedData(raw) {
     let dataToSave = {};
     if (raw && typeof raw === 'object') {
         if (raw.fecha && !raw.H) { 
-            const lvls = ['H', 'P', 'T', 'O', 'M'];
-            let maxLvl = lvls.indexOf(raw.estado);
-            for(let i=0; i<=maxLvl; i++) dataToSave[lvls[i]] = raw.fecha;
+            let maxLvl = LEVELS.indexOf(raw.estado);
+            for(let i=0; i<=maxLvl; i++) dataToSave[LEVELS[i]] = raw.fecha;
             dataToSave.estado = raw.estado;
         } else {
             dataToSave = { ...raw }; 
@@ -305,17 +315,16 @@ async function paint(id) {
     let dataToSave = getMigratedData(raw);
     const currentStatus = dataToSave.estado || '';
     
-    const levels = ['H', 'P', 'T', 'O', 'M'];
-    const newLvlIdx = newTask === '' ? -1 : levels.indexOf(newTask);
-    const curLvlIdx = currentStatus === '' ? -1 : levels.indexOf(currentStatus);
+    const newLvlIdx = newTask === '' ? -1 : LEVELS.indexOf(newTask);
+    const curLvlIdx = currentStatus === '' ? -1 : LEVELS.indexOf(currentStatus);
 
     if (newLvlIdx < curLvlIdx && currentStatus !== '') {
         if (!confirm(`⚠️ ¿Deseas degradar o borrar esta unidad? Se perderán las fechas registradas superiores.`)) return;
-        for(let i = newLvlIdx + 1; i < levels.length; i++) delete dataToSave[levels[i]];
+        for(let i = newLvlIdx + 1; i < LEVELS.length; i++) delete dataToSave[LEVELS[i]];
         dataToSave.estado = newTask;
     } else if (newTask !== '') {
         for(let i = 0; i <= newLvlIdx; i++) {
-            if (!dataToSave[levels[i]]) dataToSave[levels[i]] = hoy;
+            if (!dataToSave[LEVELS[i]]) dataToSave[LEVELS[i]] = hoy;
         }
         dataToSave.estado = newTask;
     }
@@ -327,7 +336,7 @@ async function paint(id) {
     if (newTask === '') delete HISTORIAL_PROD[id];
     else HISTORIAL_PROD[id] = dataToSave;
     
-    await localforage.setItem('HISTORIAL_PROD', HISTORIAL_PROD);
+    try { await localforage.setItem('HISTORIAL_PROD', HISTORIAL_PROD); } catch (e) { console.error("Error al guardar historial:", e); }
     actualizarContadores();
 }
 
@@ -337,8 +346,7 @@ async function paintRow(trackerId, filaNum) {
     if (!tr || !tr.filas[filaNum]) return;
     
     const f = tr.filas[filaNum];
-    const levels = ['H', 'P', 'T', 'O', 'M'];
-    const newLvlIdx = newTask === '' ? -1 : levels.indexOf(newTask);
+    const newLvlIdx = newTask === '' ? -1 : LEVELS.indexOf(newTask);
     const hoy = getFechaProduccion(); // APLICACIÓN DEL NUEVO SELECTOR
 
     let needsConfirm = false;
@@ -346,7 +354,7 @@ async function paintRow(trackerId, filaNum) {
         const hId = `${trackerId}-F${filaNum}-H${h}`;
         const raw = HISTORIAL_PROD[hId];
         const st = (raw && typeof raw === 'object') ? (raw.estado || '') : (raw || '');
-        const curIdx = st === '' ? -1 : levels.indexOf(st);
+        const curIdx = st === '' ? -1 : LEVELS.indexOf(st);
         if (newLvlIdx < curIdx && st !== '') {
             needsConfirm = true;
             break;
@@ -364,11 +372,11 @@ async function paintRow(trackerId, filaNum) {
         let raw = HISTORIAL_PROD[hId];
         let dataToSave = getMigratedData(raw);
 
-        if (newLvlIdx < (dataToSave.estado ? levels.indexOf(dataToSave.estado) : -1)) {
-            for(let i = newLvlIdx + 1; i < levels.length; i++) delete dataToSave[levels[i]];
+        if (newLvlIdx < (dataToSave.estado ? LEVELS.indexOf(dataToSave.estado) : -1)) {
+            for(let i = newLvlIdx + 1; i < LEVELS.length; i++) delete dataToSave[LEVELS[i]];
         } else if (newTask !== '') {
             for(let i = 0; i <= newLvlIdx; i++) {
-                if (!dataToSave[levels[i]]) dataToSave[levels[i]] = hoy;
+                if (!dataToSave[LEVELS[i]]) dataToSave[LEVELS[i]] = hoy;
             }
         }
         dataToSave.estado = newTask;
@@ -381,7 +389,7 @@ async function paintRow(trackerId, filaNum) {
         else HISTORIAL_PROD[hId] = dataToSave;
     }
     
-    await localforage.setItem('HISTORIAL_PROD', HISTORIAL_PROD);
+    try { await localforage.setItem('HISTORIAL_PROD', HISTORIAL_PROD); } catch (e) { console.error("Error al guardar historial:", e); }
     actualizarContadores();
 }
 
@@ -390,8 +398,7 @@ async function paintTracker(trackerId) {
     const tr = PARQUE_MASTER[trackerId];
     if (!tr) return;
     
-    const levels = ['H', 'P', 'T', 'O', 'M'];
-    const newLvlIdx = newTask === '' ? -1 : levels.indexOf(newTask);
+    const newLvlIdx = newTask === '' ? -1 : LEVELS.indexOf(newTask);
     const hoy = getFechaProduccion(); // APLICACIÓN DEL NUEVO SELECTOR
 
     let needsConfirm = false;
@@ -400,7 +407,7 @@ async function paintTracker(trackerId) {
         for (let h = 1; h <= tr.filas[fN].hincas; h++) {
             const raw = HISTORIAL_PROD[`${trackerId}-F${fN}-H${h}`];
             const st = (raw && typeof raw === 'object') ? (raw.estado || '') : (raw || '');
-            const curIdx = st === '' ? -1 : levels.indexOf(st);
+            const curIdx = st === '' ? -1 : LEVELS.indexOf(st);
             if (newLvlIdx < curIdx && st !== '') {
                 needsConfirm = true;
                 break checkDegradation;
@@ -420,11 +427,11 @@ async function paintTracker(trackerId) {
             let raw = HISTORIAL_PROD[hId];
             let dataToSave = getMigratedData(raw);
 
-            if (newLvlIdx < (dataToSave.estado ? levels.indexOf(dataToSave.estado) : -1)) {
-                for(let i = newLvlIdx + 1; i < levels.length; i++) delete dataToSave[levels[i]];
+            if (newLvlIdx < (dataToSave.estado ? LEVELS.indexOf(dataToSave.estado) : -1)) {
+                for(let i = newLvlIdx + 1; i < LEVELS.length; i++) delete dataToSave[LEVELS[i]];
             } else if (newTask !== '') {
                 for(let i = 0; i <= newLvlIdx; i++) {
-                    if (!dataToSave[levels[i]]) dataToSave[levels[i]] = hoy;
+                    if (!dataToSave[LEVELS[i]]) dataToSave[LEVELS[i]] = hoy;
                 }
             }
             dataToSave.estado = newTask;
@@ -438,7 +445,7 @@ async function paintTracker(trackerId) {
         }
     }
     
-    await localforage.setItem('HISTORIAL_PROD', HISTORIAL_PROD);
+    try { await localforage.setItem('HISTORIAL_PROD', HISTORIAL_PROD); } catch (e) { console.error("Error al guardar historial:", e); }
     actualizarContadores();
 }
 
@@ -479,8 +486,7 @@ function actualizarContadores() {
     for (let id of sbIds) {
         totalCajas++;
         let checks = HISTORIAL_CAJAS[id] || {};
-        let count = 0;
-        if(checks['localizacion']) count++; if(checks['soportacion']) count++; if(checks['fusibles']) count++; if(checks['con_strings']) count++; if(checks['con_bus']) count++; if(checks['limpieza']) count++;
+        let count = contarChecks(checks);
         if(count === 0) cRed++; else if(count === 6) cGreen++; else cOrange++;
     }
 

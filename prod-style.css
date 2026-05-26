@@ -31,7 +31,6 @@ select, input { padding: 8px; border-radius: 5px; border: 1px solid #cbd5e1; fon
 
 /* --- DASHBOARD FLOTANTE --- */
 .summary-panel { position: fixed; bottom: 20px; left: 20px; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(5px); border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); padding: 15px; z-index: 1000; width: max-content; border: 2px solid var(--blue); }
-.summary-panel.hidden { display: none; }
 .summary-panel h3 { margin: 0 0 12px 0; font-size: 14px; color: var(--blue); border-bottom: 2px solid #eee; padding-bottom: 5px; }
 .summary-grid { display: flex; flex-direction: column; gap: 8px; }
 .sum-item { display: flex; justify-content: space-between; gap: 20px; font-size: 12px; padding-left: 8px; border-left: 5px solid #ccc; background: #f8f9fa; padding: 8px 12px; border-radius: 0 4px 4px 0; }
