@@ -4,6 +4,7 @@ let HISTORIAL_PROD = {};
 let PARQUE_ESTACIONES = {};
 let PARQUE_CAJAS = {}; 
 let HISTORIAL_CAJAS = {};
+let _currentCajaId = null;
 
 localforage.config({ name: 'SIGMA_PROD_V1', storeName: 'produccion_hincas' });
 
@@ -220,7 +221,7 @@ async function renderMatrix() {
         let colorClass = 'sb-red'; if(count === 6) colorClass = 'sb-green'; else if(count > 0) colorClass = 'sb-orange';
         const numCaja = sb.name.split('-').slice(2).join('-').split('_')[0];
         const safeId = escapeJsStr(id);
-        html += `<div class="string-box ${colorClass}" style="left: ${pxX}px; top: ${pxY}px; width: ${wS}px; height: ${pxH}px;" title="Ver Checklist" onclick="abrirModalCaja('${safeId}')"><span>${escapeHtml(numCaja)}</span></div>`;
+        html += `<div id="sb-${safeId}" class="string-box ${colorClass}" style="left: ${pxX}px; top: ${pxY}px; width: ${wS}px; height: ${pxH}px;" title="Ver Checklist" onclick="abrirModalCaja('${safeId}')"><span>${escapeHtml(numCaja)}</span></div>`;
     }
 
     for (let id of ids) {
@@ -257,6 +258,7 @@ async function renderMatrix() {
 
 function abrirModalCaja(id) {
     cerrarModalCaja(); 
+    _currentCajaId = id;
     const sb = PARQUE_CAJAS[id];
     if (!sb) return;
     let checks = HISTORIAL_CAJAS[id] || {};
@@ -267,7 +269,25 @@ function abrirModalCaja(id) {
     document.body.insertAdjacentHTML('beforeend', html);
 }
 
-function cerrarModalCaja() { const m = document.getElementById('modal-caja-overlay'); if(m) { m.remove(); renderMatrix(); } }
+function cerrarModalCaja() { 
+    const m = document.getElementById('modal-caja-overlay'); 
+    if(m) { 
+        m.remove(); 
+        if (_currentCajaId) {
+            const sbEl = document.getElementById('sb-' + _currentCajaId);
+            if (sbEl) {
+                const checks = HISTORIAL_CAJAS[_currentCajaId] || {};
+                const count = contarChecks(checks);
+                let colorClass = 'sb-red';
+                if (count === 6) colorClass = 'sb-green';
+                else if (count > 0) colorClass = 'sb-orange';
+                sbEl.className = 'string-box ' + colorClass;
+            }
+            _currentCajaId = null;
+        }
+        actualizarContadores(); 
+    } 
+}
 
 async function toggleCheckCaja(id, item, isChecked) {
     if (!HISTORIAL_CAJAS[id]) HISTORIAL_CAJAS[id] = {};
@@ -288,6 +308,28 @@ function contarChecks(checks) {
     let count = 0;
     if(checks['localizacion']) count++; if(checks['soportacion']) count++; if(checks['fusibles']) count++; if(checks['con_strings']) count++; if(checks['con_bus']) count++; if(checks['limpieza']) count++;
     return count;
+}
+
+function modalConfirmacion(mensaje) {
+    return new Promise((resolve) => {
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+        const idYes = 'btn-cf-y-' + Date.now();
+        const idNo = 'btn-cf-n-' + Date.now();
+        overlay.innerHTML = `
+            <div class="modal-content" onclick="event.stopPropagation()">
+                <h3>⚠️ Confirmar</h3>
+                <p style="margin: 15px 0; color: #555; font-size: 14px; line-height: 1.5;">${mensaje}</p>
+                <div style="display: flex; gap: 10px;">
+                    <button id="${idYes}" class="btn-close" style="flex:1; background: #dc2626;">Sí, continuar</button>
+                    <button id="${idNo}" class="btn-close" style="flex:1; background: #64748b;">Cancelar</button>
+                </div>
+            </div>`;
+        overlay.addEventListener('click', () => { overlay.remove(); resolve(false); });
+        overlay.querySelector('#' + idYes).addEventListener('click', (e) => { e.stopPropagation(); overlay.remove(); resolve(true); });
+        overlay.querySelector('#' + idNo).addEventListener('click', (e) => { e.stopPropagation(); overlay.remove(); resolve(false); });
+        document.body.appendChild(overlay);
+    });
 }
 
 function getMigratedData(raw) {
@@ -353,7 +395,7 @@ async function paint(id) {
     const curLvlIdx = getLevelIndex(data.estado || '');
 
     if (newLvlIdx < curLvlIdx && data.estado) {
-        if (!confirm(`⚠️ ¿Deseas degradar o borrar esta unidad? Se perderán las fechas registradas superiores.`)) return;
+        if (!await modalConfirmacion('¿Deseas degradar o borrar esta unidad? Se perderán las fechas registradas superiores.')) return;
     }
 
     applyToCell(id, newTask, newLvlIdx, hoy);
@@ -380,7 +422,7 @@ async function paintRow(trackerId, filaNum) {
         }
     }
     if (needsConfirm) {
-        if (!confirm('⚠️ ¿Deseas degradar o borrar esta fila? Se perderán fechas de producción superiores.')) return;
+        if (!await modalConfirmacion('¿Deseas degradar o borrar esta fila? Se perderán fechas de producción superiores.')) return;
     }
 
     for (let h = 1; h <= f.hincas; h++) {
@@ -411,7 +453,7 @@ async function paintTracker(trackerId) {
         }
     }
     if (needsConfirm) {
-        if (!confirm('⚠️ ¿Deseas degradar o borrar este tracker? Se perderán fechas superiores.')) return;
+        if (!await modalConfirmacion('¿Deseas degradar o borrar este tracker? Se perderán fechas superiores.')) return;
     }
 
     for (let fN in tr.filas) {
