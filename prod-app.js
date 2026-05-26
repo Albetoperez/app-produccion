@@ -14,7 +14,7 @@ function escapeHtml(str) {
 }
 
 function escapeJsStr(str) {
-    return String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    return String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"').replace(/</g, '\\x3C').replace(/>/g, '\\x3E').replace(/\n/g, '\\n');
 }
 
 function setTask(task, el) {
@@ -39,8 +39,14 @@ async function importarArchivos(input) {
     if (btn) btn.innerText = "⏳ Procesando...";
     let ultimoArcoDetectado = '';
 
+    const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB limit
+
     for (let i = 0; i < files.length; i++) {
         const file = files[i];
+        if (file.size > MAX_FILE_SIZE) {
+            alert(`⚠️ El archivo "${file.name}" excede el límite de 20MB y no se procesará.`);
+            continue;
+        }
         const reader = new FileReader();
         await new Promise((resolve) => {
             reader.onload = function(e) {
@@ -77,8 +83,24 @@ function detectarArco(id) {
     return match ? `ARC${match[1] || match[2]}` : 'S/A';
 }
 
+function validarEstructuraExcel(data) {
+    if (!data || data.length === 0) {
+        alert('⚠️ El archivo Excel no contiene datos válidos.');
+        return false;
+    }
+    const cols = Object.keys(data[0]).map(k => k.trim().toUpperCase());
+    const required = ['CODIGO', 'X', 'Y'];
+    const missing = required.filter(r => !cols.includes(r));
+    if (missing.length > 0) {
+        alert(`⚠️ El Excel no tiene las columnas requeridas: ${missing.join(', ')}.\nColumnas encontradas: ${cols.join(', ')}`);
+        return false;
+    }
+    return true;
+}
+
 function procesarDatosJSON(data) {
     let arcoEnEsteArchivo = '';
+    if (!validarEstructuraExcel(data)) return '';
     data.forEach(rawRow => {
         let row = {};
         for (let key in rawRow) row[key.trim().toUpperCase()] = rawRow[key];
@@ -231,6 +253,7 @@ async function renderMatrix() {
 function abrirModalCaja(id) {
     cerrarModalCaja(); 
     const sb = PARQUE_CAJAS[id];
+    if (!sb) return;
     let checks = HISTORIAL_CAJAS[id] || {};
     const items = [{id: 'localizacion', label: '📍 Localización'}, {id: 'soportacion', label: '⚙️ Soportación'}, {id: 'fusibles', label: '🔌 Fusibles'}, {id: 'con_strings', label: '⚡ Conexionado Strings'}, {id: 'con_bus', label: '🔋 Conexionado BUS'}, {id: 'limpieza', label: '🧹 Limpieza'}];
     let html = `<div id="modal-caja-overlay" class="modal-overlay" onclick="cerrarModalCaja()"><div class="modal-content" onclick="event.stopPropagation()"><h3>Checklist: <span style="color:var(--accent);">${escapeHtml(sb.name)}</span></h3><div class="checklist">`;
@@ -471,17 +494,27 @@ function actualizarContadores() {
 }
 
 window.onload = async () => {
-    const s = await localforage.getItem('PARQUE_MASTER_DATA');
-    const ps = await localforage.getItem('PARQUE_ESTACIONES_DATA');
-    const sb = await localforage.getItem('PARQUE_CAJAS_DATA');
-    const hcajas = await localforage.getItem('HISTORIAL_CAJAS');
-    const h = await localforage.getItem('HISTORIAL_PROD');
+    try {
+        const s = await localforage.getItem('PARQUE_MASTER_DATA');
+        const ps = await localforage.getItem('PARQUE_ESTACIONES_DATA');
+        const sb = await localforage.getItem('PARQUE_CAJAS_DATA');
+        const hcajas = await localforage.getItem('HISTORIAL_CAJAS');
+        const h = await localforage.getItem('HISTORIAL_PROD');
 
-    if(s) PARQUE_MASTER = s; 
-    if(ps) PARQUE_ESTACIONES = ps; 
-    if(sb) PARQUE_CAJAS = sb; 
-    if(hcajas) HISTORIAL_CAJAS = hcajas;
-    if(h) HISTORIAL_PROD = h; 
+        if(s) PARQUE_MASTER = s; 
+        if(ps) PARQUE_ESTACIONES = ps; 
+        if(sb) PARQUE_CAJAS = sb; 
+        if(hcajas) HISTORIAL_CAJAS = hcajas;
 
-    if(s) actualizarSelectores(); 
+        if (h) {
+            for (let key in h) {
+                h[key] = getMigratedData(h[key]);
+            }
+            HISTORIAL_PROD = h;
+        }
+
+        if(s) actualizarSelectores(); 
+    } catch (error) {
+        console.error("Error al cargar datos:", error);
+    }
 };

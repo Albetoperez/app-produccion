@@ -11,22 +11,32 @@ let chartDiarioSCB = null;
 localforage.config({ name: 'SIGMA_PROD_V1', storeName: 'produccion_hincas' });
 
 window.onload = async () => {
-    const s = await localforage.getItem('PARQUE_MASTER_DATA');
-    const h = await localforage.getItem('HISTORIAL_PROD');
-    const c = await localforage.getItem('PARQUE_CAJAS_DATA');
-    const hc = await localforage.getItem('HISTORIAL_CAJAS');
+    try {
+        const s = await localforage.getItem('PARQUE_MASTER_DATA');
+        const h = await localforage.getItem('HISTORIAL_PROD');
+        const c = await localforage.getItem('PARQUE_CAJAS_DATA');
+        const hc = await localforage.getItem('HISTORIAL_CAJAS');
 
-    if (s) PARQUE_MASTER = s;
-    if (h) HISTORIAL_PROD = h;
-    if (c) PARQUE_CAJAS = c;
-    if (hc) HISTORIAL_CAJAS = hc;
+        if (s) PARQUE_MASTER = s;
+        if (c) PARQUE_CAJAS = c;
+        if (hc) HISTORIAL_CAJAS = hc;
 
-    if (s) {
-        inicializarSelectorArco();
-        procesarDashboard();
-    } else {
-        document.getElementById('blocks-accordion-container').innerHTML = '<div class="empty-state">No hay datos mecánicos.</div>';
-        document.getElementById('blocks-accordion-scb').innerHTML = '<div class="empty-state">No hay datos eléctricos.</div>';
+        if (h) {
+            for (let key in h) {
+                h[key] = getMigratedData(h[key]);
+            }
+            HISTORIAL_PROD = h;
+        }
+
+        if (s) {
+            inicializarSelectorArco();
+            procesarDashboard();
+        } else {
+            document.getElementById('blocks-accordion-container').innerHTML = '<div class="empty-state">No hay datos mecánicos.</div>';
+            document.getElementById('blocks-accordion-scb').innerHTML = '<div class="empty-state">No hay datos eléctricos.</div>';
+        }
+    } catch (error) {
+        console.error("Error al cargar datos:", error);
     }
 };
 
