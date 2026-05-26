@@ -3,104 +3,172 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SIGMA Control - PM Strategic Dashboard</title>
+    <title>SIGMA PROD - Dashboard Estratégico</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="prod-style.css">
     <style>
-        :root {
-            --blue: #005596; --accent-orange: #ff9800;
-            --hinca: #ffeb3b; --posthead: #2196f3;
-            --torque: #9c27b0; --omega: #00bcd4; --modulo: #4caf50;
-        }
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f0f3f7; margin: 0; padding: 20px; color: #333; }
+        .dashboard-container { padding: 20px; max-height: calc(100vh - 70px); overflow-y: auto; box-sizing: border-box; background: #f0f3f7; }
+        .nav-tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid #cbd5e1; padding-bottom: 10px; }
+        .tab-btn { padding: 10px 20px; border: none; background: #e2e8f0; color: #475569; font-weight: bold; border-radius: 6px; cursor: pointer; transition: all 0.2s; }
+        .tab-btn.active { background: var(--blue); color: white; }
         
-        /* --- CABECERA CORPORATIVA --- */
-        header { 
-            background: var(--blue); color: white; padding: 15px 25px; border-radius: 12px; 
-            margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-        }
-        .logo-area { display: flex; align-items: center; gap: 15px; }
-        .brand { font-weight: 900; color: var(--accent-orange); font-size: 1.2rem; border-right: 2px solid var(--accent-orange); padding-right: 10px; }
-        .app-name { color: #e0e0e0; font-weight: bold; font-size: 0.9rem;}
+        .filter-bar-dash { display: flex; flex-wrap: wrap; background: white; padding: 15px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 20px; gap: 15px; align-items: center; border-left: 5px solid var(--blue); }
+        .filter-group { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: bold; color: #475569; }
+        .filter-group select, .filter-group input { padding: 6px; border: 1px solid #cbd5e1; border-radius: 5px; outline: none; font-family: inherit; }
+
+        .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        .kpi-card { background: white; padding: 15px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border-left: 5px solid var(--c); display: flex; align-items: center; justify-content: space-between; }
+        .kpi-info h4 { margin: 0 0 5px 0; color: #64748b; font-size: 12px; text-transform: uppercase; }
+        .kpi-info .num { font-size: 20px; font-weight: 900; color: #1e293b; }
+        .kpi-icon { fontSize: 24px; color: var(--c); opacity: 0.8; }
+
+        .main-charts-grid { display: grid; grid-template-columns: 2.5fr 1fr; gap: 20px; margin-bottom: 25px; }
+        .scb-charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 25px; }
+        @media (max-width: 1100px) { .main-charts-grid, .scb-charts-grid { grid-template-columns: 1fr; } }
         
-        .nav-container { display: flex; gap: 10px; align-items: center; }
-        .btn-nav-outline { background: #ffffff; color: var(--blue); border: 2px solid var(--blue); padding: 8px 15px; border-radius: 6px; font-weight: bold; cursor: pointer; text-decoration: none; font-size: 13px; transition: all 0.2s; display: inline-block; }
-        .btn-nav-outline:hover { background: #f0f7ff; transform: translateY(-1px); }
+        .left-column { display: flex; flex-direction: column; gap: 20px; }
+        .right-column { display: flex; flex-direction: column; gap: 20px; }
 
-        /* --- COMPONENTES DEL DASHBOARD --- */
-        .kpi-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
-        .kpi-card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); text-align: center; border-top: 5px solid var(--blue); }
-        .kpi-card h3 { margin: 0; font-size: 12px; color: #666; text-transform: uppercase; }
-        .kpi-card p { margin: 10px 0 0; font-size: 20px; font-weight: 900; color: var(--blue); }
+        .chart-box { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        .chart-box h3 { margin: 0 0 15px 0; color: #1e293b; font-size: 14px; border-bottom: 1px solid #f1f5f9; padding-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
 
-        .tabs { display: flex; gap: 10px; margin-bottom: 20px; }
-        .tab { padding: 12px 25px; background: #e0e0e0; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.3s; }
-        .tab.active { background: var(--blue); color: white; }
+        .analytics-table { width: 100%; border-collapse: collapse; font-size: 13px; text-align: left; }
+        .analytics-table th { padding: 10px; background: #f8fafc; color: #64748b; font-weight: bold; border-bottom: 2px solid #e2e8f0; }
+        .analytics-table td { padding: 14px 10px; border-bottom: 1px solid #f1f5f9; color: #334155; }
+        .progress-label { display: flex; justify-content: space-between; font-size: 11px; font-weight: bold; margin-bottom: 4px;}
+        .progress-bar-bg { width: 100%; height: 8px; background: #e2e8f0; border-radius: 4px; overflow: hidden; }
+        .progress-bar-fill { height: 100%; background: var(--c); width: 0%; transition: width 0.5s; }
+
+        .blocks-section { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        .accordion-header { background: #f1f5f9; color: var(--blue); padding: 12px 15px; font-weight: bold; border-radius: 6px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; margin-top: 10px; border: 1px solid #e2e8f0; }
+        .accordion-header:hover { background: #e2e8f0; }
+        .accordion-content { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 15px; padding: 15px 5px; }
+        .accordion-content.hidden { display: none; }
         
-        .view { display: none; }
-        .view.active { display: block; }
-
-        .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(450px, 1fr)); gap: 20px; margin-bottom: 20px; }
-        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.08); }
-        .full-width { grid-column: 1 / -1; }
-        h2 { margin-top: 0; color: var(--blue); font-size: 16px; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 20px; }
-        
-        table { width: 100%; border-collapse: collapse; }
-        th { background: #fcfcfc; color: #888; text-transform: uppercase; font-size: 11px; text-align: center; padding: 15px; border-bottom: 2px solid #eee; }
-        td { padding: 10px; border-bottom: 1px solid #f9f9f9; text-align: center; }
-        .perc-badge { padding: 5px 10px; border-radius: 6px; font-weight: bold; font-size: 11px; display: inline-block; min-width: 45px; text-align: center; }
-
-        .controls-bar { background: white; padding: 15px 20px; border-radius: 10px; margin-bottom: 20px; display: flex; align-items: center; gap: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); flex-wrap: wrap; }
-        .controls-bar input { padding: 8px; border-radius: 5px; border: 1px solid #ccc; font-family: inherit; }
-        .btn-filter { background: var(--blue); color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold; transition: 0.2s; }
-        .btn-export { background: #4caf50; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold; margin-left: auto; transition: 0.2s; }
+        .block-row-card { border: 1px solid #e2e8f0; padding: 12px; border-radius: 8px; background: #ffffff; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+        .block-row-header { font-weight: bold; font-size: 13px; margin-bottom: 10px; color: var(--blue); border-bottom: 1px solid #f1f5f9; padding-bottom: 5px;}
+        .mini-progress-container { display: flex; flex-direction: column; gap: 6px; }
+        .mini-progress-item { display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: #475569; }
+        .mini-bar-bg { width: 100px; height: 6px; background: #e2e8f0; border-radius: 3px; overflow: hidden; display: flex; }
     </style>
 </head>
 <body>
-
     <header>
-        <div class="logo-area">
-            <img src="logo.jpg" alt="Elecnor Logo" style="max-height: 40px;" onerror="this.style.display='none'">
+        <div class="logo-area" onclick="window.location.href='prod-index.html'" style="cursor: pointer;">
             <span class="brand">ELECNOR</span>
-            <span class="app-name">PM DASHBOARD</span>
+            <span class="app-name">CONTROL DE PRODUCCIÓN</span>
         </div>
         <div class="nav-container">
-            <a href="prod-index.html" class="btn-nav-outline">⬅ MENÚ PRINCIPAL</a>
-            <button class="btn-nav-outline" onclick="window.location.href='prod-index.html#mapa'">🗺️ MAPA OPERATIVO</button>
+            <button class="btn-nav-outline" onclick="window.location.href='prod-index.html'"><i class="fa-solid fa-map"></i> MAPA OPERATIVO</button>
         </div>
     </header>
 
-    <div class="kpi-container">
-        <div class="kpi-card"><h3>Hincado</h3><p id="kpi-h-val">0</p></div>
-        <div class="kpi-card"><h3>Piruletas</h3><p id="kpi-p-val">0</p></div>
-        <div class="kpi-card"><h3>Torque Tubes</h3><p id="kpi-t-val">0</p></div>
-        <div class="kpi-card"><h3>Omegas</h3><p id="kpi-o-val">0</p></div>
-        <div class="kpi-card"><h3>Módulos</h3><p id="kpi-m-val">0</p></div>
-    </div>
-
-    <div class="controls-bar" id="date-controls">
-        <strong style="color:var(--blue);">Filtro de Fechas:</strong>
-        <div>Desde: <input type="date" id="date-from"></div>
-        <div>Hasta: <input type="date" id="date-to"></div>
-        <button class="btn-filter" onclick="applyFilters()">Aplicar Filtro</button>
-        <button class="btn-export" onclick="exportToExcel()">📥 Exportar Reporte</button>
-    </div>
-
-    <div class="tabs">
-        <div class="tab active" onclick="switchTab('global', this)">Resumen Estratégico</div>
-        <div class="tab" onclick="switchTab('detalle', this)">Análisis por Arco</div>
-    </div>
-
-    <div id="view-global" class="view active"></div>
-
-    <div id="view-detalle" class="view">
-        <div style="background: white; padding: 15px; border-radius: 10px; margin-bottom: 20px; display: flex; align-items: center; gap: 15px;">
-            <strong>Arco de Trabajo:</strong>
-            <select id="select-arco-dash" style="padding: 10px; border-radius: 5px; border: 1px solid #ccc; font-weight:bold; color:var(--blue);"></select>
+    <div class="dashboard-container">
+        <div class="nav-tabs">
+            <button class="tab-btn active" id="tab-mecanica" onclick="switchTabDash('mecanica')"><i class="fa-solid fa-gear"></i> Producción Mecánica</button>
+            <button class="tab-btn" id="tab-electrica" onclick="switchTabDash('electrica')"><i class="fa-solid fa-bolt"></i> Eléctrica / SCB</button>
         </div>
-        <div id="detalle-content"></div>
+
+        <div class="filter-bar-dash">
+            <div class="filter-group">
+                <i class="fa-solid fa-filter"></i> Arco:
+                <select id="dash-select-arco" onchange="procesarDashboard()" style="border-color: var(--blue); width: 200px;"></select>
+            </div>
+            <div class="filter-group">
+                <i class="fa-regular fa-calendar"></i> Desde:
+                <input type="date" id="dash-date-from" onchange="procesarDashboard()">
+            </div>
+            <div class="filter-group">
+                <i class="fa-regular fa-calendar"></i> Hasta:
+                <input type="date" id="dash-date-to" onchange="procesarDashboard()">
+            </div>
+            <button class="btn-nav-outline" onclick="limpiarFechas()" style="padding: 5px 10px; font-size: 11px;"><i class="fa-solid fa-eraser"></i> Limpiar Fechas</button>
+        </div>
+
+        <div id="panel-mecanica">
+            <div class="main-charts-grid">
+                <div class="left-column">
+                    <div class="chart-box">
+                        <h3><span><i class="fa-solid fa-chart-column"></i> Producción Diaria (Unidades)</span></h3>
+                        <div style="position: relative; height: 280px; width: 100%;">
+                            <canvas id="chartDiario"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-box">
+                        <h3>
+                            <span><i class="fa-solid fa-chart-line"></i> Curva S de Producción</span>
+                            <select id="chart-task-filter" onchange="procesarDashboard()" style="font-size: 12px; padding: 4px; border-radius: 4px; outline: none; border: 1px solid #ccc; font-weight: bold;">
+                                <option value="H">Hincas</option>
+                                <option value="P">Piruletas</option>
+                                <option value="T">Torquetubes</option>
+                                <option value="O">Omegas</option>
+                                <option value="M" selected>Módulos</option>
+                            </select>
+                        </h3>
+                        <div style="position: relative; height: 320px; width: 100%;">
+                            <canvas id="chartCurvaS"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div class="right-column">
+                    <div class="chart-box" style="height: 100%;">
+                        <h3><span><i class="fa-solid fa-list-check"></i> Avance Numérico</span></h3>
+                        <table class="analytics-table">
+                            <thead>
+                                <tr><th>Actividad</th><th>Progreso</th></tr>
+                            </thead>
+                            <tbody id="tabla-avance-num"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="blocks-section">
+                <h3><span><i class="fa-solid fa-cubes"></i> Detalle por Bloques</span></h3>
+                <div id="blocks-accordion-container"></div>
+            </div>
+        </div>
+
+        <div id="panel-electrica" style="display: none;">
+            
+            <div class="dashboard-grid" style="grid-template-columns: repeat(3, 1fr);">
+                <div class="kpi-card" style="--c: #dc2626">
+                    <div class="kpi-info"><h4>Sin Empezar</h4><div class="num" id="kpi-scb-red">0 cajas - 0%</div></div>
+                    <div class="kpi-icon"><i class="fa-solid fa-box"></i></div>
+                </div>
+                <div class="kpi-card" style="--c: #f97316">
+                    <div class="kpi-info"><h4>En Proceso</h4><div class="num" id="kpi-scb-orange">0 cajas - 0%</div></div>
+                    <div class="kpi-icon"><i class="fa-solid fa-spinner"></i></div>
+                </div>
+                <div class="kpi-card" style="--c: #16a34a">
+                    <div class="kpi-info"><h4>Finalizadas</h4><div class="num" id="kpi-scb-green">0 de 0 cajas - 0%</div></div>
+                    <div class="kpi-icon"><i class="fa-solid fa-check-double"></i></div>
+                </div>
+            </div>
+
+            <div class="scb-charts-grid">
+                <div class="chart-box">
+                    <h3><span><i class="fa-solid fa-chart-column"></i> Producción Diaria SCB</span></h3>
+                    <div style="position: relative; height: 320px; width: 100%;">
+                        <canvas id="chartDiarioSCB"></canvas>
+                    </div>
+                </div>
+
+                <div class="chart-box">
+                    <h3><span><i class="fa-solid fa-list-check"></i> Progreso del Checklist</span></h3>
+                    <div style="position: relative; height: 320px; width: 100%;">
+                        <canvas id="chartSCB"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="blocks-section">
+                <h3><span><i class="fa-solid fa-cubes"></i> Detalle de Cajas SCB por Bloques</span></h3>
+                <div id="blocks-accordion-scb"></div>
+            </div>
+        </div>
+
     </div>
 
     <script src="prod-dashboard.js"></script>

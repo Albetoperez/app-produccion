@@ -1,473 +1,367 @@
-localforage.config({ name: 'SIGMA_PROD_V1', storeName: 'produccion_hincas' });
-
-const levels = {'': 0, 'H': 1, 'P': 2, 'T': 3, 'O': 4, 'M': 5};
-const colors = { hinca: '#ffeb3b', posthead: '#2196f3', torque: '#9c27b0', omega: '#00bcd4', modulo: '#4caf50' };
-
-let charts = {};
-
-function safeDestroy(chart) {
-    if (chart && typeof chart.destroy === 'function') {
-        try { chart.destroy(); } catch (e) { console.warn('Chart destroy error:', e); }
-    }
-    return null;
-}
 let PARQUE_MASTER = {};
 let HISTORIAL_PROD = {};
+let PARQUE_CAJAS = {};
+let HISTORIAL_CAJAS = {};
 
-let DB_CACHE = { totales: { h:0, p:0, t:0, o:0, m:0 }, fechas: {} };
+let chartS = null;
+let chartDiario = null;
+let chartSCB = null;
+let chartDiarioSCB = null;
 
-window.chartDataAccStore = null;
-window.datesInRangeStore = null;
-window.statsArcoStore = null; // Guardamos los datos del arco seleccionado
+localforage.config({ name: 'SIGMA_PROD_V1', storeName: 'produccion_hincas' });
 
-function switchTab(tabId, el) {
-    charts.daily = safeDestroy(charts.daily);
-    charts.globalRel = safeDestroy(charts.globalRel);
-    charts.scurve = safeDestroy(charts.scurve);
-    charts.dailyArco = safeDestroy(charts.dailyArco);
-    charts.arcGlobal = safeDestroy(charts.arcGlobal);
-    charts.arcBlocks = safeDestroy(charts.arcBlocks);
+window.onload = async () => {
+    const s = await localforage.getItem('PARQUE_MASTER_DATA');
+    const h = await localforage.getItem('HISTORIAL_PROD');
+    const c = await localforage.getItem('PARQUE_CAJAS_DATA');
+    const hc = await localforage.getItem('HISTORIAL_CAJAS');
 
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-    el.classList.add('active');
-    document.getElementById('view-' + tabId).classList.add('active');
-    
-    if (tabId === 'detalle') refreshDetalle();
-    else if (tabId === 'global') applyFilters();
-}
+    if (s) PARQUE_MASTER = s;
+    if (h) HISTORIAL_PROD = h;
+    if (c) PARQUE_CAJAS = c;
+    if (hc) HISTORIAL_CAJAS = hc;
 
-async function initDashboard() {
-    const saved = await localforage.getItem('PARQUE_MASTER_DATA');
-    if (!saved) return;
-    PARQUE_MASTER = saved;
-
-    // NUEVO: Cargamos el historial maestro en 1 milisegundo
-    HISTORIAL_PROD = await localforage.getItem('HISTORIAL_PROD') || {};
-
-    let arcos = [...new Set(Object.values(PARQUE_MASTER).map(tr => tr.arco))].sort();
-    const select = document.getElementById('select-arco-dash');
-    if (select) select.innerHTML = arcos.map(a => `<option value="${a}">${a}</option>`).join('');
-
-    const hoyDate = new Date();
-    const weekAgo = new Date();
-    weekAgo.setDate(hoyDate.getDate() - 7);
-    
-    document.getElementById('date-to').value = hoyDate.toISOString().split('T')[0];
-    document.getElementById('date-from').value = weekAgo.toISOString().split('T')[0];
-
-    document.getElementById('select-arco-dash').addEventListener('change', refreshDetalle);
-
-    await construirCache();
-    applyFilters();
-}
-
-function resetCache() {
-    DB_CACHE = { totales: { h:0, p:0, t:0, o:0, m:0 }, fechas: {} };
-}
-
-async function construirCache() {
-    resetCache();
-    for (let id in PARQUE_MASTER) {
-        let tr = PARQUE_MASTER[id];
-        for (let fN in tr.filas) {
-            let f = tr.filas[fN];
-            DB_CACHE.totales.h += f.hincas; DB_CACHE.totales.p += f.hincas;
-            DB_CACHE.totales.t++; DB_CACHE.totales.o++; DB_CACHE.totales.m++;
-            let minLvlFila = 5, fechaFila = "";
-
-            for (let h = 1; h <= f.hincas; h++) {
-                // LECTURA EN MEMORIA = ⚡ Velocidad luz
-                const raw = HISTORIAL_PROD[`${id}-F${fN}-H${h}`]; 
-                const st = (raw && typeof raw === 'object') ? (raw.estado || '') : (raw || '');
-                const dt = (raw && typeof raw === 'object') ? raw.fecha : null;
-                const l = levels[st] || 0;
-
-                if (dt) {
-                    if (!DB_CACHE.fechas[dt]) DB_CACHE.fechas[dt] = { h:0, p:0, t:0, o:0, m:0 };
-                    if (l >= 1) DB_CACHE.fechas[dt].h++;
-                    if (l >= 2) DB_CACHE.fechas[dt].p++;
-                    if (dt > fechaFila) fechaFila = dt;
-                }
-                if (l < minLvlFila) minLvlFila = l;
-            }
-            if (fechaFila) {
-                if (!DB_CACHE.fechas[fechaFila]) DB_CACHE.fechas[fechaFila] = { h:0, p:0, t:0, o:0, m:0 };
-                if (minLvlFila >= 3) DB_CACHE.fechas[fechaFila].t++;
-                if (minLvlFila >= 4) DB_CACHE.fechas[fechaFila].o++;
-                if (minLvlFila >= 5) DB_CACHE.fechas[fechaFila].m++;
-            }
-        }
+    if (s) {
+        inicializarSelectorArco();
+        procesarDashboard();
+    } else {
+        document.getElementById('blocks-accordion-container').innerHTML = '<div class="empty-state">No hay datos mecánicos.</div>';
+        document.getElementById('blocks-accordion-scb').innerHTML = '<div class="empty-state">No hay datos eléctricos.</div>';
     }
-}
-
-const updateKPI = (id, total, hecho) => {
-    const el = document.getElementById(id);
-    if(el) el.innerHTML = `<span style="font-size:14px; color:#666">Total: ${total}</span><br>${hecho} / <span style="color:#e74c3c">${total - hecho} pdt</span>`;
 };
 
-// --- LOGICA PESTAÑA 1: GLOBAL ---
-function applyFilters() {
-    const startStr = document.getElementById('date-from').value;
-    const endStr = document.getElementById('date-to').value;
-    if(!startStr || !endStr) return;
+function switchTabDash(tab) {
+    document.getElementById('tab-mecanica').classList.remove('active');
+    document.getElementById('tab-electrica').classList.remove('active');
+    document.getElementById(`tab-${tab}`).classList.add('active');
 
-    // Si estamos en la pestaña Arco, recalculamos el arco en lugar del global
-    if(document.getElementById('view-detalle').classList.contains('active')) {
-        refreshDetalle();
-        return;
+    if (tab === 'mecanica') {
+        document.getElementById('panel-mecanica').style.display = 'block';
+        document.getElementById('panel-electrica').style.display = 'none';
+    } else {
+        document.getElementById('panel-mecanica').style.display = 'none';
+        document.getElementById('panel-electrica').style.display = 'block';
     }
-
-    let periodData = { h:0, p:0, t:0, o:0, m:0 }, accData = { h:0, p:0, t:0, o:0, m:0 }; 
-    let startDates = { h: '-', p: '-', t: '-', o: '-', m: '-' }; 
-    let datesInRange = [];
-    let currDate = new Date(startStr + "T00:00:00");
-    let endDate = new Date(endStr + "T00:00:00");
-    
-    while(currDate <= endDate) {
-        let y = currDate.getFullYear(), m = String(currDate.getMonth() + 1).padStart(2, '0'), d = String(currDate.getDate()).padStart(2, '0');
-        datesInRange.push(`${y}-${m}-${d}`);
-        currDate.setDate(currDate.getDate() + 1);
-    }
-
-    let chartDataDaily = { h:[], p:[], t:[], o:[], m:[] }, chartDataAcc = { h:[], p:[], t:[], o:[], m:[] };
-    let runH = 0, runP = 0, runT = 0, runO = 0, runM = 0; 
-
-    const allDates = Object.keys(DB_CACHE.fechas).sort();
-    allDates.forEach(d => {
-        let counts = DB_CACHE.fechas[d];
-        if (counts.h > 0 && startDates.h === '-') startDates.h = d;
-        if (counts.p > 0 && startDates.p === '-') startDates.p = d;
-        if (counts.t > 0 && startDates.t === '-') startDates.t = d;
-        if (counts.o > 0 && startDates.o === '-') startDates.o = d;
-        if (counts.m > 0 && startDates.m === '-') startDates.m = d;
-
-        if (d <= endStr) { accData.h += counts.h; accData.p += counts.p; accData.t += counts.t; accData.o += counts.o; accData.m += counts.m; }
-        if (d >= startStr && d <= endStr) { periodData.h += counts.h; periodData.p += counts.p; periodData.t += counts.t; periodData.o += counts.o; periodData.m += counts.m; }
-        if (d < startStr) { runH += counts.h; runP += counts.p; runT += counts.t; runO += counts.o; runM += counts.m; } 
-    });
-
-    datesInRange.forEach(d => {
-        let counts = DB_CACHE.fechas[d] || { h:0, p:0, t:0, o:0, m:0 };
-        chartDataDaily.h.push(counts.h); chartDataDaily.p.push(counts.p); chartDataDaily.t.push(counts.t); chartDataDaily.o.push(counts.o); chartDataDaily.m.push(counts.m);
-        runH += counts.h; runP += counts.p; runT += counts.t; runO += counts.o; runM += counts.m;
-        chartDataAcc.h.push(runH); chartDataAcc.p.push(runP); chartDataAcc.t.push(runT); chartDataAcc.o.push(runO); chartDataAcc.m.push(runM);
-    });
-
-    window.chartDataAccStore = chartDataAcc; window.datesInRangeStore = datesInRange;
-
-    updateKPI('kpi-h-val', DB_CACHE.totales.h, accData.h);
-    updateKPI('kpi-p-val', DB_CACHE.totales.p, accData.p);
-    updateKPI('kpi-t-val', DB_CACHE.totales.t, accData.t);
-    updateKPI('kpi-o-val', DB_CACHE.totales.o, accData.o);
-    updateKPI('kpi-m-val', DB_CACHE.totales.m, accData.m);
-
-    document.getElementById('view-global').innerHTML = `
-        <div class="dashboard-grid">
-            <div class="card">
-                <h2>Producción Diaria (Del ${startStr} al ${endStr})</h2>
-                <div style="height: 300px;"><canvas id="chartDaily"></canvas></div>
-            </div>
-            <div class="card">
-                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 15px;">
-                    <h2 style="margin:0; border:none; padding:0;">Curva S (Acumulado)</h2>
-                    <select id="select-fase-scurve" style="padding: 5px; border-radius: 4px; border: 1px solid #ccc; font-size: 13px; font-weight: bold; color: #005596; cursor: pointer;">
-                        <option value="h">Hincado</option><option value="p">Piruletas</option><option value="t">Torque Tubes</option><option value="o">Omegas</option><option value="m">Módulos</option>
-                    </select>
-                </div>
-                <div style="height: 260px;"><canvas id="chartSCurve"></canvas></div>
-            </div>
-        </div>
-        <div class="card full-width" style="margin-top: 20px; padding: 15px;">
-            <h2 style="margin-bottom: 15px;">Resumen Numérico de Planta</h2>
-            <div style="display: flex; flex-wrap: wrap; gap: 30px; align-items: stretch;">
-                <div style="flex: 1 1 55%; overflow-x: auto;">
-                    <table id="tabla-export" style="width:100%; border-collapse: collapse; font-size: 13px;">
-                        <thead>
-                            <tr style="background:#f8f9fa; border-bottom:2px solid #ddd;">
-                                <th style="text-align:left; padding:8px 10px; color:#555;">Fase</th>
-                                <th style="text-align:center; padding:8px 10px; color:#555;">Periodo (${startStr} al ${endStr})</th>
-                                <th style="text-align:center; padding:8px 10px; color:#555;">Acumulado Total</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr><td style="text-align:left; padding:6px 10px; border-bottom:1px solid #eee; color:var(--blue);"><b>Hincado</b></td><td style="text-align:center; padding:6px 10px; border-bottom:1px solid #eee;"><b>${periodData.h}</b> uds</td><td style="text-align:center; padding:6px 10px; border-bottom:1px solid #eee;"><b>${accData.h}</b> uds <span style="color:#888; font-size:11px; margin-left:10px;">(Iniciado: ${startDates.h})</span></td></tr>
-                            <tr><td style="text-align:left; padding:6px 10px; border-bottom:1px solid #eee; color:var(--blue);"><b>Piruletas</b></td><td style="text-align:center; padding:6px 10px; border-bottom:1px solid #eee;"><b>${periodData.p}</b> uds</td><td style="text-align:center; padding:6px 10px; border-bottom:1px solid #eee;"><b>${accData.p}</b> uds <span style="color:#888; font-size:11px; margin-left:10px;">(Iniciado: ${startDates.p})</span></td></tr>
-                            <tr><td style="text-align:left; padding:6px 10px; border-bottom:1px solid #eee; color:var(--blue);"><b>Torque Tubes</b></td><td style="text-align:center; padding:6px 10px; border-bottom:1px solid #eee;"><b>${periodData.t}</b> filas</td><td style="text-align:center; padding:6px 10px; border-bottom:1px solid #eee;"><b>${accData.t}</b> filas <span style="color:#888; font-size:11px; margin-left:10px;">(Iniciado: ${startDates.t})</span></td></tr>
-                            <tr><td style="text-align:left; padding:6px 10px; border-bottom:1px solid #eee; color:var(--blue);"><b>Omegas</b></td><td style="text-align:center; padding:6px 10px; border-bottom:1px solid #eee;"><b>${periodData.o}</b> filas</td><td style="text-align:center; padding:6px 10px; border-bottom:1px solid #eee;"><b>${accData.o}</b> filas <span style="color:#888; font-size:11px; margin-left:10px;">(Iniciado: ${startDates.o})</span></td></tr>
-                            <tr><td style="text-align:left; padding:6px 10px; border-bottom:1px solid #eee; color:var(--blue);"><b>Módulos</b></td><td style="text-align:center; padding:6px 10px; border-bottom:1px solid #eee;"><b>${periodData.m}</b> filas</td><td style="text-align:center; padding:6px 10px; border-bottom:1px solid #eee;"><b>${accData.m}</b> filas <span style="color:#888; font-size:11px; margin-left:10px;">(Iniciado: ${startDates.m})</span></td></tr>
-                        </tbody>
-                    </table>
-                </div>
-                <div style="flex: 1 1 40%; min-width: 300px; display: flex; flex-direction: column;">
-                    <h3 style="margin-top:0; margin-bottom:10px; font-size: 14px; color: #555; text-align:center;">Avance Relativo Acumulado (%)</h3>
-                    <div style="flex-grow: 1; position: relative; min-height: 200px;"><canvas id="chartGlobalRelative"></canvas></div>
-                </div>
-            </div>
-        </div>
-    `;
-
-    document.getElementById('select-fase-scurve').addEventListener('change', updateSCurve);
-
-    charts.daily = safeDestroy(charts.daily);
-    charts.daily = new Chart(document.getElementById('chartDaily'), {
-        type: 'bar',
-        data: {
-            labels: datesInRange,
-            datasets: [
-                { label: 'Hincado', data: chartDataDaily.h, backgroundColor: colors.hinca },
-                { label: 'Piruletas', data: chartDataDaily.p, backgroundColor: colors.posthead },
-                { label: 'Torques', data: chartDataDaily.t, backgroundColor: colors.torque },
-                { label: 'Omegas', data: chartDataDaily.o, backgroundColor: colors.omega },
-                { label: 'Módulos', data: chartDataDaily.m, backgroundColor: colors.modulo }
-            ]
-        },
-        options: { responsive: true, maintainAspectRatio: false }
-    });
-
-    charts.globalRel = safeDestroy(charts.globalRel);
-    charts.globalRel = new Chart(document.getElementById('chartGlobalRelative'), {
-        type: 'bar',
-        data: {
-            labels: ['Hinca', 'Piruletas', 'Torque', 'Omegas', 'Módulos'],
-            datasets: [{
-                data: [ calcPerc(accData.h, DB_CACHE.totales.h), calcPerc(accData.p, DB_CACHE.totales.p), calcPerc(accData.t, DB_CACHE.totales.t), calcPerc(accData.o, DB_CACHE.totales.o), calcPerc(accData.m, DB_CACHE.totales.m) ],
-                backgroundColor: [colors.hinca, colors.posthead, colors.torque, colors.omega, colors.modulo]
-            }]
-        },
-        options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { min: 0, max: 100 } } }
-    });
-
-    updateSCurve();
 }
 
-function updateSCurve() {
-    const fase = document.getElementById('select-fase-scurve').value;
-    const dataMap = {
-        'h': { label: 'Acumulado Hincas', data: window.chartDataAccStore.h, color: 'rgba(255, 235, 59, 0.4)', border: '#fbc02d' },
-        'p': { label: 'Acumulado Piruletas', data: window.chartDataAccStore.p, color: 'rgba(33, 150, 243, 0.4)', border: '#1976d2' },
-        't': { label: 'Acumulado Torques', data: window.chartDataAccStore.t, color: 'rgba(156, 39, 176, 0.4)', border: '#7b1fa2' },
-        'o': { label: 'Acumulado Omegas', data: window.chartDataAccStore.o, color: 'rgba(0, 188, 212, 0.4)', border: '#0097a7' },
-        'm': { label: 'Acumulado Módulos', data: window.chartDataAccStore.m, color: 'rgba(76, 175, 80, 0.4)', border: '#388e3c' }
+function inicializarSelectorArco() {
+    let arcos = new Set();
+    Object.values(PARQUE_MASTER).forEach(tr => { if(tr.arco) arcos.add(tr.arco); });
+    Object.values(PARQUE_CAJAS).forEach(sb => { if(sb.arco) arcos.add(sb.arco); });
+    
+    const select = document.getElementById('dash-select-arco');
+    let optionsHtml = '<option value="TODOS">🌍 TODOS LOS ARCOS</option>';
+    
+    Array.from(arcos).sort().forEach(arco => {
+        if (arco !== 'S/A') optionsHtml += `<option value="${arco}">⚡ ${arco}</option>`;
+    });
+    select.innerHTML = optionsHtml;
+}
+
+function limpiarFechas() {
+    document.getElementById('dash-date-from').value = '';
+    document.getElementById('dash-date-to').value = '';
+    procesarDashboard();
+}
+
+function toggleAccordion(headerElement) {
+    const content = headerElement.nextElementSibling;
+    const icon = headerElement.querySelector('i.fa-chevron-down, i.fa-chevron-up');
+    if (content.classList.contains('hidden')) {
+        content.classList.remove('hidden');
+        if(icon) { icon.classList.remove('fa-chevron-down'); icon.classList.add('fa-chevron-up'); }
+    } else {
+        content.classList.add('hidden');
+        if(icon) { icon.classList.remove('fa-chevron-up'); icon.classList.add('fa-chevron-down'); }
+    }
+}
+
+function procesarDashboard() {
+    const arcoSeleccionado = document.getElementById('dash-select-arco').value;
+    const dateFrom = document.getElementById('dash-date-from').value;
+    const dateTo = document.getElementById('dash-date-to').value;
+    const tareaCurva = document.getElementById('chart-task-filter').value;
+    
+    const enRango = (fecha) => {
+        if (!fecha) return false;
+        if (dateFrom && fecha < dateFrom) return false;
+        if (dateTo && fecha > dateTo) return false;
+        return true;
     };
-    
-    charts.scurve = safeDestroy(charts.scurve);
-    charts.scurve = new Chart(document.getElementById('chartSCurve'), {
-        type: 'line',
-        data: {
-            labels: window.datesInRangeStore,
-            datasets: [{ label: dataMap[fase].label, data: dataMap[fase].data, borderColor: dataMap[fase].border, backgroundColor: dataMap[fase].color, fill: true, tension: 0.3, pointRadius: 4, pointBackgroundColor: dataMap[fase].border }]
-        },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: true, position: 'top' } } }
-    });
-}
 
-function exportToExcel() {
-    let table = document.getElementById('tabla-export');
-    if (!table) { alert('No hay datos para exportar.'); return; }
-    let wb = XLSX.utils.table_to_book(table, {sheet: "Reporte_Produccion"});
-    XLSX.writeFile(wb, "Reporte_SIGMA_Diario.xlsx");
-}
+    // ==========================================
+    // 1. PROCESAMIENTO MECÁNICO
+    // ==========================================
+    let trackersFiltrados = Object.values(PARQUE_MASTER);
+    if (arcoSeleccionado !== 'TODOS') trackersFiltrados = trackersFiltrados.filter(tr => tr.arco === arcoSeleccionado);
 
-// --- LOGICA PESTAÑA 2: ANALISIS POR ARCO ---
-async function refreshDetalle() {
-    const arco = document.getElementById('select-arco-dash').value;
-    if(!arco) return;
-    const startStr = document.getElementById('date-from').value;
-    const endStr = document.getElementById('date-to').value;
+    let tHincas = 0, tFilas = 0;
+    let cHincas = 0, cPiruletas = 0, cTorque = 0, cOmegas = 0, cModulos = 0;
+    let bloquesData = {}, produccionDiaria = {}, datosCurva = {}; 
+    const lv = {'': 0, 'H': 1, 'P': 2, 'T': 3, 'O': 4, 'M': 5};
 
-    const stats = await calcularStatsArco(arco);
-    window.statsArcoStore = stats; // Guardar en memoria para el desplegable de bloques
-
-    updateKPI('kpi-h-val', stats.global.totalH, stats.global.h);
-    updateKPI('kpi-p-val', stats.global.totalH, stats.global.p);
-    updateKPI('kpi-t-val', stats.global.totalF, stats.global.t);
-    updateKPI('kpi-o-val', stats.global.totalF, stats.global.o);
-    updateKPI('kpi-m-val', stats.global.totalF, stats.global.m);
-
-    // Preparar fechas para el gráfico diario del Arco
-    let datesInRange = [];
-    let currDate = new Date(startStr + "T00:00:00");
-    let endDate = new Date(endStr + "T00:00:00");
-    while(currDate <= endDate) {
-        let y = currDate.getFullYear(), m = String(currDate.getMonth() + 1).padStart(2, '0'), d = String(currDate.getDate()).padStart(2, '0');
-        datesInRange.push(`${y}-${m}-${d}`);
-        currDate.setDate(currDate.getDate() + 1);
-    }
-
-    let chartDataDailyArco = { h:[], p:[], t:[], o:[], m:[] };
-    datesInRange.forEach(d => {
-        let counts = stats.fechas[d] || { h:0, p:0, t:0, o:0, m:0 };
-        chartDataDailyArco.h.push(counts.h); chartDataDailyArco.p.push(counts.p);
-        chartDataDailyArco.t.push(counts.t); chartDataDailyArco.o.push(counts.o);
-        chartDataDailyArco.m.push(counts.m);
-    });
-
-    const bLabels = Object.keys(stats.bloques).sort();
-    let tableHtml = `<table><thead><tr><th>Bloque</th><th>Hinca</th><th>Piruletas</th><th>Torque</th><th>Omegas</th><th>Módulos</th><th>Estado</th></tr></thead><tbody>`;
-    bLabels.forEach(b => {
-        const d = stats.bloques[b];
-        const hPerc = calcPerc(d.h, d.totalH), pPerc = calcPerc(d.p, d.totalH);
-        const tPerc = calcPerc(d.t, d.totalF), oPerc = calcPerc(d.o, d.totalF), mPerc = calcPerc(d.m, d.totalF);
-        let statusTag = hPerc > 99 ? '✅ Finalizado' : (hPerc > 0 ? '🚧 En proceso' : '⏳ Pendiente');
+    trackersFiltrados.forEach(tr => {
+        const ar = tr.arco;
+        const bKey = `Bloque ${tr.block}`;
         
-        tableHtml += `<tr><td><strong>${b}</strong></td>
-            <td>${getBadge(hPerc, colors.hinca)}</td>
-            <td>${getBadge(pPerc, colors.posthead)}</td>
-            <td>${getBadge(tPerc, colors.torque)}</td>
-            <td>${getBadge(oPerc, colors.omega)}</td>
-            <td>${getBadge(mPerc, colors.modulo)}</td>
-            <td><small>${statusTag}</small></td></tr>`;
-    });
-    tableHtml += '</tbody></table>';
+        if (!bloquesData[ar]) bloquesData[ar] = {};
+        if (!bloquesData[ar][bKey]) bloquesData[ar][bKey] = { name: bKey, tH: 0, tF: 0, cH: 0, cP: 0, cT: 0, cO: 0, cM: 0 };
 
-    // Inyectar el diseño en la pestaña de Arco
-    document.getElementById('detalle-content').innerHTML = `
-        <div class="dashboard-grid">
-            <div class="card">
-                <h2>Producción Diaria (${arco})</h2>
-                <div style="height: 300px;"><canvas id="chartDailyArco"></canvas></div>
-            </div>
-            <div class="card">
-                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 15px;">
-                    <h2 style="margin:0; border:none; padding:0;">Producción por Bloque (%)</h2>
-                    <select id="select-fase-bloques" style="padding: 5px; border-radius: 4px; border: 1px solid #ccc; font-size: 13px; font-weight: bold; color: #005596; cursor: pointer;">
-                        <option value="h">Hincado</option><option value="p">Piruletas</option><option value="t">Torque Tubes</option><option value="o">Omegas</option><option value="m">Módulos</option>
-                    </select>
-                </div>
-                <div style="height: 260px;"><canvas id="chartBloques"></canvas></div>
-            </div>
-        </div>
-        <div class="card full-width" style="margin-top: 20px; padding: 15px;">
-            <div style="display: flex; flex-wrap: wrap; gap: 30px; align-items: stretch;">
-                <div style="flex: 1 1 55%; overflow-x: auto;">
-                    <h2 style="margin-bottom: 15px;">Estado Detallado de Bloques (${arco})</h2>
-                    ${tableHtml}
-                </div>
-                <div style="flex: 1 1 40%; min-width: 300px; display: flex; flex-direction: column;">
-                    <h3 style="margin-top:0; margin-bottom:10px; font-size: 14px; color: #555; text-align:center;">Avance Relativo (%)</h3>
-                    <div style="flex-grow: 1; position: relative; min-height: 200px;"><canvas id="chartGlobalArco"></canvas></div>
-                </div>
-            </div>
-        </div>
-    `;
-
-    document.getElementById('select-fase-bloques').addEventListener('change', updateBlocksChart);
-
-    // Gráfico de Barras Diarias del Arco
-    charts.dailyArco = safeDestroy(charts.dailyArco);
-    charts.dailyArco = new Chart(document.getElementById('chartDailyArco'), {
-        type: 'bar',
-        data: {
-            labels: datesInRange,
-            datasets: [
-                { label: 'Hincado', data: chartDataDailyArco.h, backgroundColor: colors.hinca },
-                { label: 'Piruletas', data: chartDataDailyArco.p, backgroundColor: colors.posthead },
-                { label: 'Torques', data: chartDataDailyArco.t, backgroundColor: colors.torque },
-                { label: 'Omegas', data: chartDataDailyArco.o, backgroundColor: colors.omega },
-                { label: 'Módulos', data: chartDataDailyArco.m, backgroundColor: colors.modulo }
-            ]
-        },
-        options: { responsive: true, maintainAspectRatio: false }
-    });
-
-    // Gráfico de Avance Relativo del Arco
-    charts.arcGlobal = safeDestroy(charts.arcGlobal);
-    charts.arcGlobal = new Chart(document.getElementById('chartGlobalArco'), {
-        type: 'bar',
-        data: {
-            labels: ['Hinca', 'Piruletas', 'Torque', 'Omegas', 'Módulos'],
-            datasets: [{
-                data: [ calcPerc(stats.global.h, stats.global.totalH), calcPerc(stats.global.p, stats.global.totalH), calcPerc(stats.global.t, stats.global.totalF), calcPerc(stats.global.o, stats.global.totalF), calcPerc(stats.global.m, stats.global.totalF) ],
-                backgroundColor: [colors.hinca, colors.posthead, colors.torque, colors.omega, colors.modulo]
-            }]
-        },
-        options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { min: 0, max: 100 } } }
-    });
-
-    updateBlocksChart();
-}
-
-function updateBlocksChart() {
-    const fase = document.getElementById('select-fase-bloques').value;
-    const stats = window.statsArcoStore;
-    const bLabels = Object.keys(stats.bloques).sort();
-
-    const config = {
-        'h': { label: 'Hincado %', key: 'h', total: 'totalH', color: colors.hinca },
-        'p': { label: 'Piruletas %', key: 'p', total: 'totalH', color: colors.posthead },
-        't': { label: 'Torques %', key: 't', total: 'totalF', color: colors.torque },
-        'o': { label: 'Omegas %', key: 'o', total: 'totalF', color: colors.omega },
-        'm': { label: 'Módulos %', key: 'm', total: 'totalF', color: colors.modulo }
-    }[fase];
-
-    const dataArr = bLabels.map(l => calcPerc(stats.bloques[l][config.key], stats.bloques[l][config.total]));
-
-    charts.arcBlocks = safeDestroy(charts.arcBlocks);
-    charts.arcBlocks = new Chart(document.getElementById('chartBloques'), {
-        type: 'bar', // Cambiado a barras para comparar bloques de forma más clara
-        data: {
-            labels: bLabels,
-            datasets: [{ label: config.label, data: dataArr, backgroundColor: config.color }]
-        },
-        options: { responsive: true, maintainAspectRatio: false, scales: { y: { min: 0, max: 100 } } }
-    });
-}
-
-async function calcularStatsArco(arco) {
-    const bloques = {};
-    const global = { h:0, p:0, t:0, o:0, m:0, totalH:0, totalF:0 };
-    const fechas = {}; 
-    const ids = Object.keys(PARQUE_MASTER).filter(id => PARQUE_MASTER[id].arco === arco);
-
-    for (const id of ids) {
-        const tr = PARQUE_MASTER[id];
-        const b = tr.block || 'S/B';
-        if (!bloques[b]) bloques[b] = { h:0, p:0, t:0, o:0, m:0, totalH:0, totalF:0 };
-
-        for (const fN in tr.filas) {
+        for (let fN in tr.filas) {
             const f = tr.filas[fN];
-            bloques[b].totalF++; bloques[b].totalH += f.hincas;
-            global.totalF++; global.totalH += f.hincas;
-            let mL = 5, fMax = "";
+            tFilas++; tHincas += f.hincas;
+            bloquesData[ar][bKey].tF++;
+            bloquesData[ar][bKey].tH += f.hincas;
+
+            let minLvlFila = 5;
+            let datesT = [], datesO = [], datesM = [];
 
             for (let h = 1; h <= f.hincas; h++) {
-                // LECTURA EN MEMORIA = ⚡ Velocidad luz
-                const raw = HISTORIAL_PROD[`${id}-F${fN}-H${h}`]; 
-                const s = (raw && typeof raw === 'object') ? (raw.estado || '') : (raw || '');
-                const dt = (raw && typeof raw === 'object') ? raw.fecha : null;
-                const l = levels[s] || 0;
-
-                if (l >= 1) { bloques[b].h++; global.h++; }
-                if (l >= 2) { bloques[b].p++; global.p++; }
-                if (l < mL) mL = l;
-
-                if(dt) {
-                    if(!fechas[dt]) fechas[dt] = {h:0, p:0, t:0, o:0, m:0};
-                    if (l >= 1) fechas[dt].h++;
-                    if (l >= 2) fechas[dt].p++;
-                    if (dt > fMax) fMax = dt;
+                const raw = HISTORIAL_PROD[`${tr.name}-F${fN}-H${h}`];
+                let data = { H: null, P: null, T: null, O: null, M: null, estado: '' };
+                
+                if (raw && typeof raw === 'object') {
+                    if (raw.fecha && !raw.H) {
+                       const lvls = ['H', 'P', 'T', 'O', 'M'];
+                       let idx = lvls.indexOf(raw.estado);
+                       for(let i=0; i<=idx; i++) data[lvls[i]] = raw.fecha;
+                       data.estado = raw.estado;
+                    } else { data = raw; }
                 }
-            }
-            if (mL >= 3) { bloques[b].t++; global.t++; }
-            if (mL >= 4) { bloques[b].o++; global.o++; }
-            if (mL >= 5) { bloques[b].m++; global.m++; }
 
-            if (fMax) {
-                 if(!fechas[fMax]) fechas[fMax] = {h:0, p:0, t:0, o:0, m:0};
-                 if (mL >= 3) fechas[fMax].t++;
-                 if (mL >= 4) fechas[fMax].o++;
-                 if (mL >= 5) fechas[fMax].m++;
+                const l = lv[data.estado] || 0;
+                if (l < minLvlFila) minLvlFila = l;
+
+                if (data.H) {
+                    if (enRango(data.H)) {
+                        cHincas++; bloquesData[ar][bKey].cH++;
+                        if (!produccionDiaria[data.H]) produccionDiaria[data.H] = {H:0,P:0,T:0,O:0,M:0};
+                        produccionDiaria[data.H].H++;
+                    }
+                    if (tareaCurva === 'H') datosCurva[data.H] = (datosCurva[data.H] || 0) + 1;
+                }
+                if (data.P) {
+                    if (enRango(data.P)) {
+                        cPiruletas++; bloquesData[ar][bKey].cP++;
+                        if (!produccionDiaria[data.P]) produccionDiaria[data.P] = {H:0,P:0,T:0,O:0,M:0};
+                        produccionDiaria[data.P].P++;
+                    }
+                    if (tareaCurva === 'P') datosCurva[data.P] = (datosCurva[data.P] || 0) + 1;
+                }
+
+                if (data.T) datesT.push(data.T);
+                if (data.O) datesO.push(data.O);
+                if (data.M) datesM.push(data.M);
+            }
+
+            if (minLvlFila >= 3 && datesT.length === f.hincas) {
+                let maxDateT = datesT.sort().reverse()[0];
+                if (enRango(maxDateT)) {
+                    cTorque++; bloquesData[ar][bKey].cT++;
+                    if (!produccionDiaria[maxDateT]) produccionDiaria[maxDateT] = {H:0,P:0,T:0,O:0,M:0};
+                    produccionDiaria[maxDateT].T++;
+                }
+                if (tareaCurva === 'T') datosCurva[maxDateT] = (datosCurva[maxDateT] || 0) + 1;
+            }
+
+            if (minLvlFila >= 4 && datesO.length === f.hincas) {
+                let maxDateO = datesO.sort().reverse()[0];
+                if (enRango(maxDateO)) {
+                    cOmegas++; bloquesData[ar][bKey].cO++;
+                    if (!produccionDiaria[maxDateO]) produccionDiaria[maxDateO] = {H:0,P:0,T:0,O:0,M:0};
+                    produccionDiaria[maxDateO].O++;
+                }
+                if (tareaCurva === 'O') datosCurva[maxDateO] = (datosCurva[maxDateO] || 0) + 1;
+            }
+
+            if (minLvlFila >= 5 && datesM.length === f.hincas) {
+                let maxDateM = datesM.sort().reverse()[0];
+                if (enRango(maxDateM)) {
+                    cModulos++; bloquesData[ar][bKey].cM++;
+                    if (!produccionDiaria[maxDateM]) produccionDiaria[maxDateM] = {H:0,P:0,T:0,O:0,M:0};
+                    produccionDiaria[maxDateM].M++;
+                }
+                if (tareaCurva === 'M') datosCurva[maxDateM] = (datosCurva[maxDateM] || 0) + 1;
             }
         }
+    });
+
+    const pctH = tHincas ? ((cHincas / tHincas) * 100).toFixed(1) : 0;
+    const pctP = tHincas ? ((cPiruletas / tHincas) * 100).toFixed(1) : 0;
+    const pctT = tFilas ? ((cTorque / tFilas) * 100).toFixed(1) : 0;
+    const pctO = tFilas ? ((cOmegas / tFilas) * 100).toFixed(1) : 0;
+    const pctM = tFilas ? ((cModulos / tFilas) * 100).toFixed(1) : 0;
+
+    const getRowHtml = (lbl, curr, tot, pct, c) => `
+        <tr><td><strong>${lbl}</strong></td><td><div class="progress-label"><span>${curr} / ${tot} totales</span><span style="color:${c}">${pct}%</span></div><div class="progress-bar-bg"><div class="progress-bar-fill" style="background:${c}; width:${pct}%"></div></div></td></tr>`;
+
+    document.getElementById('tabla-avance-num').innerHTML = getRowHtml('Hincas', cHincas, tHincas, pctH, '#ffb300') + getRowHtml('Piruletas', cPiruletas, tHincas, pctP, '#2196f3') + getRowHtml('Torquetubes', cTorque, tFilas, pctT, '#9c27b0') + getRowHtml('Omegas', cOmegas, tFilas, pctO, '#00bcd4') + getRowHtml('Módulos', cModulos, tFilas, pctM, '#4caf50');
+
+    const fechasDiarias = Object.keys(produccionDiaria).sort(); 
+    if (chartDiario) chartDiario.destroy();
+    const ctxD = document.getElementById('chartDiario').getContext('2d');
+    chartDiario = new Chart(ctxD, {
+        type: 'bar',
+        data: {
+            labels: fechasDiarias.length ? fechasDiarias : ['Sin datos'],
+            datasets: [
+                { label: 'Hincas', data: fechasDiarias.map(f => produccionDiaria[f].H || 0), backgroundColor: '#ffb300', borderRadius: 3 },
+                { label: 'Piruletas', data: fechasDiarias.map(f => produccionDiaria[f].P || 0), backgroundColor: '#2196f3', borderRadius: 3 },
+                { label: 'Torquetubes', data: fechasDiarias.map(f => produccionDiaria[f].T || 0), backgroundColor: '#9c27b0', borderRadius: 3 },
+                { label: 'Omegas', data: fechasDiarias.map(f => produccionDiaria[f].O || 0), backgroundColor: '#00bcd4', borderRadius: 3 },
+                { label: 'Módulos', data: fechasDiarias.map(f => produccionDiaria[f].M || 0), backgroundColor: '#4caf50', borderRadius: 3 }
+            ]
+        },
+        options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, grid: { color: '#f1f5f9' } }, x: { grid: { display: false } } }, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12 } } } }
+    });
+
+    const fechasOrdenadasS = Object.keys(datosCurva).sort();
+    let datosAcumulados = [], acumulado = 0;
+    fechasOrdenadasS.forEach(fecha => { acumulado += datosCurva[fecha]; datosAcumulados.push(acumulado); });
+    if (chartS) chartS.destroy();
+    const lblCurva = `Acumulado - ${document.getElementById('chart-task-filter').options[document.getElementById('chart-task-filter').selectedIndex].text}`;
+    chartS = new Chart(document.getElementById('chartCurvaS').getContext('2d'), {
+        type: 'line',
+        data: { labels: fechasOrdenadasS.length ? fechasOrdenadasS : ['Sin datos'], datasets: [{ label: lblCurva, data: datosAcumulados.length ? datosAcumulados : [0], borderColor: '#005596', backgroundColor: 'rgba(0, 85, 150, 0.1)', borderWidth: 3, fill: true, tension: 0.1 }] },
+        options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, grid: { color: '#f1f5f9' } }, x: { grid: { display: false } } }, plugins: { legend: { display: true, position: 'bottom' } } }
+    });
+
+    let accordionHtml = '';
+    const arcosKeys = Object.keys(bloquesData).sort();
+    if (arcosKeys.length === 0) { accordionHtml = '<div class="empty-state">No hay bloques registrados.</div>'; } else {
+        arcosKeys.forEach(ar => {
+            const isHidden = (arcoSeleccionado === 'TODOS') ? 'hidden' : '';
+            const iconCls = isHidden ? 'fa-chevron-down' : 'fa-chevron-up';
+            accordionHtml += `<div class="accordion-header" onclick="toggleAccordion(this)"><span><i class="fa-solid fa-bolt"></i> ${ar}</span><i class="fa-solid ${iconCls}"></i></div><div class="accordion-content ${isHidden}">`;
+            Object.values(bloquesData[ar]).sort((a,b) => a.name.localeCompare(b.name)).forEach(bl => {
+                const bPctH = bl.tH ? ((bl.cH / bl.tH) * 100).toFixed(0) : 0, bPctP = bl.tH ? ((bl.cP / bl.tH) * 100).toFixed(0) : 0, bPctT = bl.tF ? ((bl.cT / bl.tF) * 100).toFixed(0) : 0, bPctO = bl.tF ? ((bl.cO / bl.tF) * 100).toFixed(0) : 0, bPctM = bl.tF ? ((bl.cM / bl.tF) * 100).toFixed(0) : 0;
+                accordionHtml += `<div class="block-row-card"><div class="block-row-header">${bl.name}</div><div class="mini-progress-container">
+                    <div class="mini-progress-item"><span>Hincas: ${bl.cH}/${bl.tH}</span><div class="mini-bar-bg"><div style="background:#ffb300; width:${bPctH}%"></div></div></div>
+                    <div class="mini-progress-item"><span>Piruletas: ${bl.cP}/${bl.tH}</span><div class="mini-bar-bg"><div style="background:#2196f3; width:${bPctP}%"></div></div></div>
+                    <div class="mini-progress-item"><span>Torquetubes: ${bl.cT}/${bl.tF}</span><div class="mini-bar-bg"><div style="background:#9c27b0; width:${bPctT}%"></div></div></div>
+                    <div class="mini-progress-item"><span>Omegas: ${bl.cO}/${bl.tF}</span><div class="mini-bar-bg"><div style="background:#00bcd4; width:${bPctO}%"></div></div></div>
+                    <div class="mini-progress-item"><span>Módulos: ${bl.cM}/${bl.tF}</span><div class="mini-bar-bg"><div style="background:#4caf50; width:${bPctM}%"></div></div></div></div></div>`;
+            });
+            accordionHtml += `</div>`;
+        });
     }
-    return { bloques, global, fechas };
-}
+    document.getElementById('blocks-accordion-container').innerHTML = accordionHtml;
 
-function calcPerc(p, t) { return t > 0 ? (p / t * 100).toFixed(1) : "0.0"; }
-function getBadge(v, c) { 
-    const t = (v > 50 && c === '#ffeb3b') ? '#333' : (v > 50 ? 'white' : '#333');
-    return `<span class="perc-badge" style="background:${c}; color:${t}">${v}%</span>`; 
-}
+    // ==========================================
+    // 2. PROCESAMIENTO ELÉCTRICO (SCB)
+    // ==========================================
+    let cajasFiltradas = Object.values(PARQUE_CAJAS);
+    if (arcoSeleccionado !== 'TODOS') cajasFiltradas = cajasFiltradas.filter(sb => sb.arco === arcoSeleccionado);
 
-initDashboard();
+    let tCajas = 0, scbRed = 0, scbOrange = 0, scbGreen = 0;
+    let chkCounts = { loc: 0, sop: 0, fus: 0, str: 0, bus: 0, lim: 0 };
+    let scbBloquesData = {};
+    let produccionDiariaSCB = {}; // Para el nuevo gráfico diario
+
+    cajasFiltradas.forEach(sb => {
+        tCajas++;
+        const ar = sb.arco;
+        const bKey = `Bloque ${sb.block}`;
+        
+        if (!scbBloquesData[ar]) scbBloquesData[ar] = {};
+        if (!scbBloquesData[ar][bKey]) scbBloquesData[ar][bKey] = { name: bKey, t: 0, r: 0, o: 0, g: 0 };
+        scbBloquesData[ar][bKey].t++;
+
+        let checks = HISTORIAL_CAJAS[sb.name] || {};
+        let count = 0;
+        let fechasCaja = []; // Guardamos las fechas de esta caja
+
+        const processCheck = (item, type) => {
+            if (checks[item]) {
+                count++; chkCounts[type]++;
+                // Si la fecha es un string guardado con el nuevo código, la añadimos
+                if (typeof checks[item] === 'string') fechasCaja.push(checks[item]);
+            }
+        };
+
+        processCheck('localizacion', 'loc');
+        processCheck('soportacion', 'sop');
+        processCheck('fusibles', 'fus');
+        processCheck('con_strings', 'str');
+        processCheck('con_bus', 'bus');
+        processCheck('limpieza', 'lim');
+
+        if (count === 0) { scbRed++; scbBloquesData[ar][bKey].r++; }
+        else if (count === 6) { scbGreen++; scbBloquesData[ar][bKey].g++; }
+        else { scbOrange++; scbBloquesData[ar][bKey].o++; }
+
+        // Extraer fechas para el Producción Diaria SCB
+        if (fechasCaja.length > 0) {
+            fechasCaja.sort(); // Ordenamos cronológicamente
+            let fInicio = fechasCaja[0]; // La fecha en la que se hizo el primer check
+            if (enRango(fInicio)) {
+                if (!produccionDiariaSCB[fInicio]) produccionDiariaSCB[fInicio] = { iniciadas: 0, finalizadas: 0 };
+                produccionDiariaSCB[fInicio].iniciadas++;
+            }
+
+            if (count === 6) { // Si la caja está terminada, sacamos la fecha de la última tarea
+                let fFin = fechasCaja[fechasCaja.length - 1]; 
+                if (enRango(fFin)) {
+                    if (!produccionDiariaSCB[fFin]) produccionDiariaSCB[fFin] = { iniciadas: 0, finalizadas: 0 };
+                    produccionDiariaSCB[fFin].finalizadas++;
+                }
+            }
+        }
+    });
+
+    const pctScbRed = tCajas ? ((scbRed / tCajas) * 100).toFixed(1) : 0;
+    const pctScbOrg = tCajas ? ((scbOrange / tCajas) * 100).toFixed(1) : 0;
+    const pctScbGrn = tCajas ? ((scbGreen / tCajas) * 100).toFixed(1) : 0;
+    document.getElementById('kpi-scb-red').innerText = `${scbRed} cajas - ${pctScbRed}%`;
+    document.getElementById('kpi-scb-orange').innerText = `${scbOrange} cajas - ${pctScbOrg}%`;
+    document.getElementById('kpi-scb-green').innerText = `${scbGreen} de ${tCajas} cajas - ${pctScbGrn}%`;
+
+    // Gráfico Horizontal de Checklist
+    if (chartSCB) chartSCB.destroy();
+    chartSCB = new Chart(document.getElementById('chartSCB').getContext('2d'), {
+        type: 'bar',
+        data: {
+            labels: ['Localización', 'Soportación', 'Fusibles', 'Conex. Strings', 'Conex. BUS', 'Limpieza'],
+            datasets: [{ label: 'Cajas con la tarea completada', data: [chkCounts.loc, chkCounts.sop, chkCounts.fus, chkCounts.str, chkCounts.bus, chkCounts.lim], backgroundColor: '#3b82f6', borderRadius: 4 }]
+        },
+        options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, scales: { x: { beginAtZero: true, max: tCajas || 1, grid: { color: '#f1f5f9' } }, y: { grid: { display: false } } }, plugins: { legend: { display: false } } }
+    });
+
+    // NUEVO: Gráfico Diario SCB
+    const fechasSCB = Object.keys(produccionDiariaSCB).sort();
+    if (chartDiarioSCB) chartDiarioSCB.destroy();
+    chartDiarioSCB = new Chart(document.getElementById('chartDiarioSCB').getContext('2d'), {
+        type: 'bar',
+        data: {
+            labels: fechasSCB.length ? fechasSCB : ['Sin datos'],
+            datasets: [
+                { label: 'Cajas Comenzadas', data: fechasSCB.map(f => produccionDiariaSCB[f].iniciadas), backgroundColor: '#f97316', borderRadius: 3 },
+                { label: 'Cajas Finalizadas', data: fechasSCB.map(f => produccionDiariaSCB[f].finalizadas), backgroundColor: '#16a34a', borderRadius: 3 }
+            ]
+        },
+        options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, grid: { color: '#f1f5f9' } }, x: { grid: { display: false } } }, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12 } } } }
+    });
+
+    // Acordeón SCB
+    let scbAccordionHtml = '';
+    const scbArcosKeys = Object.keys(scbBloquesData).sort();
+    if (scbArcosKeys.length === 0) { scbAccordionHtml = '<div class="empty-state">No hay cajas registradas.</div>'; } else {
+        scbArcosKeys.forEach(ar => {
+            const isHidden = (arcoSeleccionado === 'TODOS') ? 'hidden' : '';
+            const iconCls = isHidden ? 'fa-chevron-down' : 'fa-chevron-up';
+            scbAccordionHtml += `<div class="accordion-header" onclick="toggleAccordion(this)"><span><i class="fa-solid fa-bolt"></i> ${ar}</span><i class="fa-solid ${iconCls}"></i></div><div class="accordion-content ${isHidden}">`;
+            Object.values(scbBloquesData[ar]).sort((a,b) => a.name.localeCompare(b.name)).forEach(bl => {
+                const bPctG = bl.t ? ((bl.g / bl.t) * 100).toFixed(0) : 0;
+                scbAccordionHtml += `<div class="block-row-card"><div class="block-row-header">${bl.name} <span style="float:right; font-size:12px; color:#16a34a">${bPctG}% OK</span></div>
+                    <div style="display:flex; height:12px; border-radius:6px; overflow:hidden; margin-bottom:8px; background:#e2e8f0;">
+                        <div style="background:#dc2626; width:${(bl.r/bl.t)*100}%" title="Sin Empezar: ${bl.r}"></div>
+                        <div style="background:#f97316; width:${(bl.o/bl.t)*100}%" title="En Proceso: ${bl.o}"></div>
+                        <div style="background:#16a34a; width:${(bl.g/bl.t)*100}%" title="Finalizada: ${bl.g}"></div></div>
+                    <div style="display:flex; justify-content:space-between; font-size:11px; font-weight:bold; color:#475569;">
+                        <span style="color:#dc2626">🟥 ${bl.r}</span><span style="color:#f97316">🟧 ${bl.o}</span><span style="color:#16a34a">🟩 ${bl.g}</span></div></div>`;
+            });
+            scbAccordionHtml += `</div>`;
+        });
+    }
+    document.getElementById('blocks-accordion-scb').innerHTML = scbAccordionHtml;
+}

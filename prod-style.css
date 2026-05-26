@@ -23,7 +23,7 @@ header { background: var(--blue); color: white; padding: 12px 20px; display: fle
 select, input { padding: 8px; border-radius: 5px; border: 1px solid #cbd5e1; font-size: 13px; outline: none; font-family: inherit; }
 
 /* --- CONTENEDOR DEL MAPA --- */
-#matrix-container { width: 100%; height: calc(100vh - 150px); overflow: auto; background: #cbd5e1; position: relative; }
+#matrix-container { width: 100%; height: calc(100vh - 190px); overflow: auto; background: #cbd5e1; position: relative; }
 .map-canvas { position: relative; }
 
 .prod-card.map-card { position: absolute; margin: 0; transform: translate(-50%, 0); border: 2px solid var(--blue); box-shadow: 0 4px 10px rgba(0,0,0,0.3); background: white; border-radius: 6px; display: flex; flex-direction: row; padding: 4px; box-sizing: border-box; }
@@ -62,3 +62,72 @@ select, input { padding: 8px; border-radius: 5px; border: 1px solid #cbd5e1; fon
 .btn-nav-outline { background: #ffffff; color: var(--blue); border: 2px solid var(--blue); padding: 8px 15px; border-radius: 6px; font-weight: bold; cursor: pointer; text-decoration: none; font-size: 13px; transition: all 0.2s; }
 .btn-nav-outline:hover { background: #f0f7ff; transform: translateY(-1px); }
 .btn-nav-white { background: #ffffff; color: #333; border: 1px solid #ccc; padding: 8px 15px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 13px; }
+/* --- ESTILO PARA ESTACIONES DE POTENCIA --- */
+.power-station {
+    position: absolute;
+    transform: translate(-50%, 0);
+    background: #334155; 
+    color: #f8fafc;
+    border: 2px solid #f59e0b; 
+    border-radius: 6px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 6px 12px rgba(0,0,0,0.4);
+    font-weight: 900;
+    font-size: 11px;
+    text-align: center;
+    padding: 4px;
+    box-sizing: border-box;
+    z-index: 5;
+}
+.power-station span { pointer-events: none; }
+/* --- ESTILO BASE PARA CAJAS DE AGRUPAMIENTO --- */
+.string-box {
+    position: absolute;
+    transform: translate(-50%, -50%); 
+    color: #ffffff;
+    border: 1.5px solid;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    font-weight: 900;
+    font-size: 8px; 
+    z-index: 6; 
+    cursor: pointer; /* Cambiamos el ratón a una mano para indicar que es clicable */
+    transition: transform 0.1s;
+}
+.string-box:hover {
+    transform: translate(-50%, -50%) scale(1.1); /* Efecto hover para animar la caja */
+}
+.string-box span { pointer-events: none; text-shadow: 0px 0px 2px rgba(0,0,0,0.9); }
+
+/* COLORES DE ESTADO CAJAS (Rojo puro, Naranja fuerte, Verde lima) con opacidad cristal */
+.sb-red { background: rgba(255, 0, 0, 0.45); border-color: rgba(220, 0, 0, 0.9); }
+.sb-orange { background: rgba(255, 130, 0, 0.45); border-color: rgba(220, 100, 0, 0.9); }
+.sb-green { background: rgba(0, 220, 0, 0.45); border-color: rgba(0, 160, 0, 0.9); }
+/* --- DISEÑO DEL MODAL / CHECKLIST --- */
+.modal-overlay { 
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0; 
+    background: rgba(0,0,0,0.6); z-index: 2000; 
+    display: flex; align-items: center; justify-content: center; 
+    backdrop-filter: blur(2px); 
+}
+.modal-content { 
+    background: white; padding: 25px; border-radius: 12px; 
+    width: 320px; max-width: 90%; 
+    box-shadow: 0 10px 25px rgba(0,0,0,0.3); 
+    border-top: 5px solid var(--blue); 
+}
+.modal-content h3 { margin: 0 0 15px 0; color: #333; border-bottom: 1px solid #eee; padding-bottom: 10px; font-size: 16px; }
+.checklist { display: flex; flex-direction: column; gap: 12px; margin-bottom: 25px; }
+.check-item { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: bold; color: #555; cursor: pointer; }
+.check-item input { width: 18px; height: 18px; cursor: pointer; accent-color: var(--blue); }
+.btn-close { 
+    background: var(--blue); color: white; border: none; padding: 10px 15px; 
+    border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%; font-size: 14px; 
+}
+.btn-close:hover { background: #00407a; }
