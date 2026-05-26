@@ -3,6 +3,8 @@ let HISTORIAL_PROD = {};
 let PARQUE_CAJAS = {};
 let HISTORIAL_CAJAS = {};
 
+const LEVELS = ['H', 'P', 'T', 'O', 'M'];
+
 let chartS = null;
 let chartDiario = null;
 let chartSCB = null;
@@ -44,9 +46,8 @@ function getMigratedData(raw) {
     let dataToSave = {};
     if (raw && typeof raw === 'object') {
         if (raw.fecha && !raw.H) {
-            const lvls = ['H', 'P', 'T', 'O', 'M'];
-            let maxLvl = lvls.indexOf(raw.estado);
-            for(let i=0; i<=maxLvl; i++) dataToSave[lvls[i]] = raw.fecha;
+            let maxLvl = LEVELS.indexOf(raw.estado);
+            for(let i=0; i<=maxLvl; i++) dataToSave[LEVELS[i]] = raw.fecha;
             dataToSave.estado = raw.estado;
         } else {
             dataToSave = { ...raw };
