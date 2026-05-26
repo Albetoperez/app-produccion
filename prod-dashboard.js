@@ -30,6 +30,23 @@ window.onload = async () => {
     }
 };
 
+function getMigratedData(raw) {
+    let dataToSave = {};
+    if (raw && typeof raw === 'object') {
+        if (raw.fecha && !raw.H) {
+            const lvls = ['H', 'P', 'T', 'O', 'M'];
+            let maxLvl = lvls.indexOf(raw.estado);
+            for(let i=0; i<=maxLvl; i++) dataToSave[lvls[i]] = raw.fecha;
+            dataToSave.estado = raw.estado;
+        } else {
+            dataToSave = { ...raw };
+        }
+    } else if (raw && typeof raw === 'string') {
+        dataToSave.estado = raw;
+    }
+    return dataToSave;
+}
+
 function switchTabDash(tab) {
     document.getElementById('tab-mecanica').classList.remove('active');
     document.getElementById('tab-electrica').classList.remove('active');
@@ -118,16 +135,13 @@ function procesarDashboard() {
 
             for (let h = 1; h <= f.hincas; h++) {
                 const raw = HISTORIAL_PROD[`${tr.name}-F${fN}-H${h}`];
-                let data = { H: null, P: null, T: null, O: null, M: null, estado: '' };
-                
-                if (raw && typeof raw === 'object') {
-                    if (raw.fecha && !raw.H) {
-                       const lvls = ['H', 'P', 'T', 'O', 'M'];
-                       let idx = lvls.indexOf(raw.estado);
-                       for(let i=0; i<=idx; i++) data[lvls[i]] = raw.fecha;
-                       data.estado = raw.estado;
-                    } else { data = raw; }
-                }
+                let data = getMigratedData(raw);
+                if (!data.estado) data.estado = '';
+                if (!data.H) data.H = null;
+                if (!data.P) data.P = null;
+                if (!data.T) data.T = null;
+                if (!data.O) data.O = null;
+                if (!data.M) data.M = null;
 
                 const l = lv[data.estado] || 0;
                 if (l < minLvlFila) minLvlFila = l;

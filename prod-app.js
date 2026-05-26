@@ -267,6 +267,8 @@ function getMigratedData(raw) {
         } else {
             dataToSave = { ...raw }; 
         }
+    } else if (raw && typeof raw === 'string') {
+        dataToSave.estado = raw;
     }
     return dataToSave;
 }
@@ -311,22 +313,24 @@ async function paintRow(trackerId, filaNum) {
     const tr = PARQUE_MASTER[trackerId];
     if (!tr || !tr.filas[filaNum]) return;
     
-    if (newTask === '' && !confirm('⚠️ ¿Deseas borrar toda la fila?')) return;
-
     const f = tr.filas[filaNum];
     const levels = ['H', 'P', 'T', 'O', 'M'];
     const newLvlIdx = newTask === '' ? -1 : levels.indexOf(newTask);
     const hoy = getFechaProduccion(); // APLICACIÓN DEL NUEVO SELECTOR
 
+    let needsConfirm = false;
     for (let h = 1; h <= f.hincas; h++) {
         const hId = `${trackerId}-F${filaNum}-H${h}`;
         const raw = HISTORIAL_PROD[hId];
         const st = (raw && typeof raw === 'object') ? (raw.estado || '') : (raw || '');
         const curIdx = st === '' ? -1 : levels.indexOf(st);
         if (newLvlIdx < curIdx && st !== '') {
-            if (!confirm('⚠️ ¿Deseas degradar esta fila? Se perderán fechas de producción superiores.')) return;
+            needsConfirm = true;
             break;
         }
+    }
+    if (needsConfirm) {
+        if (!confirm('⚠️ ¿Deseas degradar o borrar esta fila? Se perderán fechas de producción superiores.')) return;
     }
 
     for (let h = 1; h <= f.hincas; h++) {
@@ -367,6 +371,7 @@ async function paintTracker(trackerId) {
     const newLvlIdx = newTask === '' ? -1 : levels.indexOf(newTask);
     const hoy = getFechaProduccion(); // APLICACIÓN DEL NUEVO SELECTOR
 
+    let needsConfirm = false;
     checkDegradation:
     for (let fN in tr.filas) {
         for (let h = 1; h <= tr.filas[fN].hincas; h++) {
@@ -374,10 +379,13 @@ async function paintTracker(trackerId) {
             const st = (raw && typeof raw === 'object') ? (raw.estado || '') : (raw || '');
             const curIdx = st === '' ? -1 : levels.indexOf(st);
             if (newLvlIdx < curIdx && st !== '') {
-                if (!confirm('⚠️ ¿Deseas degradar este tracker? Se perderán fechas superiores.')) return;
+                needsConfirm = true;
                 break checkDegradation;
             }
         }
+    }
+    if (needsConfirm) {
+        if (!confirm('⚠️ ¿Deseas degradar o borrar este tracker? Se perderán fechas superiores.')) return;
     }
 
     for (let fN in tr.filas) {
