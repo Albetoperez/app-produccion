@@ -6,21 +6,59 @@
     <title>SIGMA PROD - Producción Operativa</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="prod-style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .mode-toggle { display: flex; background: #e2e8f0; border-radius: 8px; padding: 4px; margin-left: 20px; box-shadow: inset 0 2px 4px rgba(0,0,0,0.1); }
+        .btn-mode { border: none; background: transparent; padding: 8px 15px; font-weight: bold; color: #64748b; border-radius: 5px; cursor: pointer; transition: all 0.2s; font-size: 12px; }
+        .btn-mode.active { background: white; color: var(--blue); box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        
+        /* Ajuste de escala dinámico para Zanjas */
+        #zanjas-viewport { width: 100%; height: calc(100vh - 230px); overflow: hidden; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; position: relative; margin-top: 10px; cursor: grab; }
+        #zanjas-viewport:active { cursor: grabbing; }
+
+        /* REDUCCIÓN EXTREMA DEL PANEL INFERIOR */
+        .summary-panel { padding: 8px 15px !important; }
+        .summary-panel h3 { margin: 2px 0 5px 0 !important; font-size: 12px !important; }
+        .summary-grid { gap: 5px !important; margin-bottom: 5px !important; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)) !important;}
+        .sum-item { padding: 4px 8px !important; }
+        .sum-item span { font-size: 10px !important; margin-bottom: 2px !important; }
+        .sum-item strong { font-size: 13px !important; }
+
+        /* LEYENDA ZANJAS */
+        #zanjas-types-legend {
+            margin-top: 5px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 6px;
+            font-size: 11px;
+            font-weight: bold;
+            background: #f1f5f9;
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #e2e8f0;
+        }
+        .za-legend-item { display: flex; align-items: center; gap: 6px; }
+        .color-box { width: 12px; height: 12px; border-radius: 2px; }
+        .meters-count { margin-left: auto; color: #475569; }
+    </style>
 </head>
 <body>
     <header>
-        <div class="logo-area" onclick="irInicio()" style="cursor: pointer;" title="Volver al menú principal">
-            <img src="logo.jpg" alt="Elecnor Logo" style="max-height: 40px;" onerror="this.style.display='none'">
+        <div class="logo-area">
             <span class="brand">ELECNOR</span>
             <span class="app-name">PRODUCCIÓN</span>
         </div>
         
-        <div class="nav-container" id="header-nav" style="display: none;">
+        <div class="nav-container" id="header-nav" style="display: none; align-items: center;">
             <button class="btn-nav-outline" onclick="irInicio()">⬅ MENÚ PRINCIPAL</button>
             <button class="btn-nav-white" onclick="document.getElementById('excel-file').click()" id="btn-import">📂 CARGAR LISTADOS</button>
             <button class="btn-nav-outline" onclick="window.location.href='prod-dashboard.html'">📊 DASHBOARD PM</button>
+            
+            <div class="mode-toggle">
+                <button id="btn-mode-em" class="btn-mode active" onclick="setAppMode('EM')"><i class="fa-solid fa-solar-panel"></i> ELECTROMECÁNICO</button>
+                <button id="btn-mode-za" class="btn-mode" onclick="setAppMode('ZA')"><i class="fa-solid fa-road-barrier"></i> ZANJAS</button>
+            </div>
         </div>
 
         <input type="file" id="excel-file" accept=".xlsx, .xls, .csv" multiple style="display:none;" onchange="importarArchivos(this)">
@@ -51,7 +89,7 @@
     </div>
 
     <div id="app-mapa" style="display: none;">
-        <nav class="toolbar">
+        <nav class="toolbar" id="toolbar-em">
             <div class="tool active" data-task="H" onclick="setTask('H', this)" style="--c: #ffeb3b">Hinca</div>
             <div class="tool" data-task="P" onclick="setTask('P', this)" style="--c: #2196f3">Piruletas</div>
             <div class="tool" data-task="T" onclick="setTask('T', this)" style="--c: #9c27b0">Torque</div>
@@ -62,7 +100,9 @@
 
         <div class="filter-bar">
             <select id="select-arco" onchange="actualizarBloques()" style="font-weight: bold;"></select>
-            <select id="select-block" onchange="renderMatrix()"></select>
+            <div id="filter-block-container" style="display: inline-block;">
+                <select id="select-block" onchange="renderMatrixSelector()"></select>
+            </div>
             
             <div style="display: flex; align-items: center; gap: 5px; margin-left: 10px; border-left: 2px solid #cbd5e1; padding-left: 10px;">
                 <span style="font-weight: bold; color: #475569; font-size: 13px;"><i class="fa-regular fa-calendar"></i> Fecha Prod:</span>
@@ -84,14 +124,68 @@
                 <div class="sum-item" style="border-left-color: #4caf50"><span>Módulos (Filas)</span><strong id="sum-M">0/0</strong></div>
             </div>
 
-            <h3 style="margin-top: 15px;">Progreso Cajas SCB</h3>
+            <h3 style="margin-top: 8px;">Progreso Cajas SCB</h3>
             <div class="summary-grid">
                 <div class="sum-item" style="border-left-color: #dc2626"><span>Sin comenzar</span><strong id="sum-scb-red">0/0</strong></div>
                 <div class="sum-item" style="border-left-color: #ea580c"><span>Comenzadas</span><strong id="sum-scb-orange">0/0</strong></div>
                 <div class="sum-item" style="border-left-color: #16a34a"><span>Finalizadas</span><strong id="sum-scb-green">0/0</strong></div>
             </div>
         </div>
-    </div>
+
+        <div id="summary-panel-za" class="summary-panel" style="display: none;">
+            <h3>Resumen de Obra Civil: <span id="summary-arco-name-za">-</span></h3>
+            <div class="summary-grid" style="grid-template-columns: 1fr;">
+                <div class="sum-item" style="border-left-color: #1e293b">
+                    <span>Total Metros Lineales (Aprox)</span>
+                    <strong id="sum-za-metros">0 m</strong>
+                </div>
+            </div>
+
+            <div id="zanjas-types-legend">
+                <div class="za-legend-item" style="color: #ca8a04;"><div class="color-box" style="background:#ffee00; border: 1px solid #ca8a04;"></div>CCTV (FO+PWR): <span class="meters-count" id="sum-za-otras">0 m</span></div>
+                <div class="za-legend-item" style="color: #f59e0b;"><div class="color-box" style="background:#f59e0b;"></div>Baja Tensión (BT): <span class="meters-count" id="sum-za-bt">0 m</span></div>
+                <div class="za-legend-item" style="color: #22c55e;"><div class="color-box" style="background:#22c55e;"></div>SSAA / Auxiliares: <span class="meters-count" id="sum-za-ssaa">0 m</span></div>
+                <div class="za-legend-item" style="color: #ec4899;"><div class="color-box" style="background:#ec4899;"></div>PAT (Zanjas G): <span class="meters-count" id="sum-za-pat">0 m</span></div>
+                <div class="za-legend-item" style="color: #06b6d4;"><div class="color-box" style="background:#06b6d4;"></div>Entrada PS: <span class="meters-count" id="sum-za-entradaps">0 m</span></div>
+                <div class="za-legend-item" style="color: #b45309; background: #fef08a; padding: 2px 6px; border-radius: 4px;"><div class="color-box" style="background:#ffee00; border: 1px solid #b45309;"></div>CCTV (FO+PWR): <span class="meters-count" id="sum-za-otras" style="font-weight: 900;">0 m</span></div>
+            </div>
+
+            <h3 style="margin-top: 10px; border-top: 1px solid #e2e8f0; padding-top: 8px;">Elementos Puntuales</h3>
+            <div class="summary-grid" style="grid-template-columns: repeat(4, 1fr);">
+                <div class="sum-item" style="border-left-color: #000">
+                    <span>Arquetas <svg width="12" height="12" style="vertical-align:middle;margin-left:3px;"><rect x="1" y="1" width="10" height="10" fill="none" stroke="#000" stroke-width="2"/></svg></span>
+                    <strong id="sum-pt-arqueta">0</strong>
+                </div>
+                <div class="sum-item" style="border-left-color: #000">
+                    <span>GATEWAY <svg width="12" height="12" style="vertical-align:middle;margin-left:3px;"><path d="M 6,1 L 11,11 L 1,11 Z" fill="none" stroke="#000" stroke-width="2"/><circle cx="6" cy="7.5" r="1.5" fill="#000"/></svg></span>
+                    <strong id="sum-pt-gateway">0</strong>
+                </div>
+                <div class="sum-item" style="border-left-color: #000">
+                    <span>MBOX <svg width="12" height="12" style="vertical-align:middle;margin-left:3px;"><path d="M 6,1 L 11,11 L 1,11 Z" fill="none" stroke="#000" stroke-width="2"/><circle cx="6" cy="7.5" r="1.5" fill="#000"/></svg></span>
+                    <strong id="sum-pt-mbox">0</strong>
+                </div>
+                <div class="sum-item" style="border-left-color: #000">
+                    <span>TBOX <svg width="12" height="12" style="vertical-align:middle;margin-left:3px;"><path d="M 6,1 L 11,11 L 1,11 Z" fill="none" stroke="#000" stroke-width="2"/><circle cx="6" cy="7.5" r="1.5" fill="#000"/></svg></span>
+                    <strong id="sum-pt-tbox">0</strong>
+                </div>
+                <div class="sum-item" style="border-left-color: #000">
+                    <span>METEO <svg width="12" height="12" style="vertical-align:middle;margin-left:3px;"><path d="M 6,1 L 11,11 L 1,11 Z" fill="none" stroke="#000" stroke-width="2"/><circle cx="6" cy="7.5" r="1.5" fill="#000"/></svg></span>
+                    <strong id="sum-pt-meteo">0</strong>
+                </div>
+                <div class="sum-item" style="border-left-color: #000">
+                    <span>CSB <svg width="12" height="12" style="vertical-align:middle;margin-left:3px;"><path d="M 6,1 L 11,11 L 1,11 Z" fill="none" stroke="#000" stroke-width="2"/><circle cx="6" cy="7.5" r="1.5" fill="#000"/></svg></span>
+                    <strong id="sum-pt-csb">0</strong>
+                </div>
+                <div class="sum-item" style="border-left-color: #000">
+                    <span>CCTV <svg width="12" height="12" style="vertical-align:middle;margin-left:3px;"><circle cx="6" cy="6" r="5" fill="none" stroke="#000" stroke-width="1.5"/><path d="M 2.5,2.5 L 9.5,9.5 M 2.5,9.5 L 9.5,2.5" stroke="#000" stroke-width="1.5"/></svg></span>
+                    <strong id="sum-pt-cctv">0</strong>
+                </div>
+                <div class="sum-item" style="border-left-color: #000">
+                    <span style="font-weight:900;">Tuberías FC</span>
+                    <strong id="sum-pt-fc">0</strong>
+                </div>
+            </div>
+        </div>
 
     <script src="prod-app.js"></script>
     <script>
