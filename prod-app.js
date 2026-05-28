@@ -14,6 +14,12 @@ let pzScale = 1;
 let pzPointX = 0;
 let pzPointY = 0;
 
+let zaPanelCollapsed = false;
+let zaLayerState = {
+    zanja: { 'MT': true, 'BT': true, 'SSAA': true, 'PAT': true, 'CCTV': true, 'ENTRADA_PS': true },
+    puntual: { 'arqueta': true, 'gateway': true, 'mbox': true, 'tbox': true, 'meteo': true, 'csb': true, 'cctv': true, 'fc': true }
+};
+
 localforage.config({ name: 'SIGMA_PROD_V1', storeName: 'produccion_hincas' });
 
 const LEVELS = ['H', 'P', 'T', 'O', 'M'];
@@ -44,16 +50,26 @@ function setAppMode(mode) {
 
     container.removeAttribute('style');
 
+    const layerContainer = document.getElementById('za-layer-container');
     if (mode === 'EM') {
         document.getElementById('toolbar-em').style.display = 'flex';
         document.getElementById('filter-block-container').style.display = 'inline-block';
         if(panelEM) panelEM.style.display = 'block';
         if(panelZA) panelZA.style.display = 'none';
+        if(layerContainer) layerContainer.style.display = 'none';
     } else {
         document.getElementById('toolbar-em').style.display = 'none';
         document.getElementById('filter-block-container').style.display = 'none';
         if(panelEM) panelEM.style.display = 'none';
         if(panelZA) panelZA.style.display = 'block';
+        if(layerContainer) layerContainer.style.display = 'flex';
+        zaPanelCollapsed = false;
+        const body = document.getElementById('za-panel-body');
+        if (body) body.classList.remove('collapsed');
+        const icon = document.getElementById('za-toggle-icon');
+        if (icon) icon.classList.remove('collapsed');
+        const viewport = document.getElementById('zanjas-viewport');
+        if (viewport) viewport.classList.remove('za-panel-collapsed');
     }
     
     pzScale = 1; pzPointX = 0; pzPointY = 0;
@@ -370,6 +386,7 @@ function normalizeZanjaType(ref) {
     if (r.includes('BT')) return 'BT';
     if (r.includes('SSAA')) return 'SSAA';
     if (r.includes('ZANJA G') || r.includes('ZANJA-G') || r.includes('ZANJA_G')) return 'PAT';
+    if (r.includes('CCTV')) return 'CCTV';
     return 'OTRAS';
 }
 
@@ -379,10 +396,11 @@ function getZanjaColorByType(type) {
         'BT': '#f59e0b',         
         'SSAA': '#22c55e',       
         'PAT': '#ec4899',        
+        'CCTV': '#ca8a04',       
         'ENTRADA_PS': '#06b6d4',  
-        'OTRAS': '#ca8a04'       
+        'OTRAS': '#94a3b8'       
     };
-    return colors[type] || '#ca8a04';
+    return colors[type] || '#94a3b8';
 }
 
 function renderMatrixZanjas() {
@@ -426,15 +444,17 @@ function renderMatrixZanjas() {
     let svgHtml = `<svg style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:10;">`;
     
     let zanjaMetrosTotal = 0;
-    let metrosPorTipo = { 'MT': 0, 'BT': 0, 'SSAA': 0, 'PAT': 0, 'ENTRADA_PS': 0, 'OTRAS': 0 };
+    let metrosPorTipo = { 'MT': 0, 'BT': 0, 'SSAA': 0, 'PAT': 0, 'CCTV': 0, 'ENTRADA_PS': 0 };
     
     Object.values(PARQUE_ZANJAS).forEach(z => {
         const dx = z.x2 - z.x1; const dy = z.y2 - z.y1;
         const longitud = Math.sqrt(dx*dx + dy*dy);
         
-        zanjaMetrosTotal += longitud;
         const type = normalizeZanjaType(z.ref);
-        metrosPorTipo[type] += longitud;
+        metrosPorTipo[type] = (metrosPorTipo[type] || 0) + longitud;
+        if (!zaLayerState.zanja[type]) return;
+        
+        zanjaMetrosTotal += longitud;
 
         const pxX1 = ((z.x1 - gMinX) * baseScaleX) + MARGIN; const pxY1 = ((gMaxY - z.y1) * baseScaleY) + MARGIN;
         const pxX2 = ((z.x2 - gMinX) * baseScaleX) + MARGIN; const pxY2 = ((gMaxY - z.y2) * baseScaleY) + MARGIN;
@@ -477,11 +497,13 @@ function renderMatrixZanjas() {
             
             if (refUp.includes('ARQUETA')) {
                 countsPT.arqueta++;
+                if (!zaLayerState.puntual.arqueta) return;
                 const s = 12; 
                 svgHtml += `<rect x="${pxX - s/2}" y="${pxY - s/2}" width="${s}" height="${s}" fill="none" stroke="${c}" stroke-width="${sw}" style="pointer-events:auto; cursor:pointer;" onclick="alert('${alertMsg}')"></rect>`;
             } 
             else if (refUp.includes('POSTE CAJA')) {
                 countsPT.csb++;
+                if (!zaLayerState.puntual.csb) return;
                 const s = 14; 
                 const s2 = s/2;
                 const triPath = `M ${pxX},${pxY - s2} L ${pxX + s2},${pxY + s2} L ${pxX - s2},${pxY + s2} Z`;
@@ -492,6 +514,7 @@ function renderMatrixZanjas() {
             }
             else if (refUp.includes('BÁCULO-CCTV') || refUp.includes('BACULO-CCTV') || refUp.includes('CCTV')) {
                 countsPT.cctv++;
+                if (!zaLayerState.puntual.cctv) return;
                 const r = 6; 
                 const o = r * 0.7071; 
                 svgHtml += `<circle cx="${pxX}" cy="${pxY}" r="${r}" fill="none" stroke="${c}" stroke-width="${sw}" style="pointer-events:auto; cursor:pointer;" onclick="alert('${alertMsg}')"></circle>`;
@@ -505,11 +528,13 @@ function renderMatrixZanjas() {
                 const triPath = `M ${pxX},${pxY - s2} L ${pxX + s2},${pxY + s2} L ${pxX - s2},${pxY + s2} Z`;
                 
                 let shortName = 'PVH';
-                if (refUp.includes('MBOX+GATEWAY')) { shortName = 'MBOX+GW'; countsPT.mbox++; }
-                else if (refUp.includes('GATEWAY')) { shortName = 'GATEWAY'; countsPT.gateway++; }
-                else if (refUp.includes('MBOX')) { shortName = 'MBOX'; countsPT.mbox++; }
-                else if (refUp.includes('TBOX')) { shortName = 'TBOX'; countsPT.tbox++; }
-                else if (refUp.includes('METEO')) { shortName = 'METEO'; countsPT.meteo++; }
+                let pType = null;
+                if (refUp.includes('MBOX+GATEWAY')) { shortName = 'MBOX+GW'; pType = 'mbox'; countsPT.mbox++; }
+                else if (refUp.includes('GATEWAY')) { shortName = 'GATEWAY'; pType = 'gateway'; countsPT.gateway++; }
+                else if (refUp.includes('MBOX')) { shortName = 'MBOX'; pType = 'mbox'; countsPT.mbox++; }
+                else if (refUp.includes('TBOX')) { shortName = 'TBOX'; pType = 'tbox'; countsPT.tbox++; }
+                else if (refUp.includes('METEO')) { shortName = 'METEO'; pType = 'meteo'; countsPT.meteo++; }
+                if (pType && !zaLayerState.puntual[pType]) return;
 
                 svgHtml += `<path d="${triPath}" fill="none" stroke="${c}" stroke-width="${sw}" style="pointer-events:auto; cursor:pointer;" onclick="alert('${alertMsg}')"/>`;
                 svgHtml += `<circle cx="${pxX}" cy="${pxY + 2.5}" r="1.5" fill="${c}" style="pointer-events:none;"></circle>`; 
@@ -517,6 +542,7 @@ function renderMatrixZanjas() {
             }
             else if (refUp.includes('FC-')) {
                 countsPT.fc++;
+                if (!zaLayerState.puntual.fc) return;
                 svgHtml += `<text x="${pxX}" y="${pxY + 3.5}" fill="${c}" font-size="10" font-weight="900" text-anchor="middle" font-family="sans-serif" style="pointer-events:auto; cursor:pointer;" onclick="alert('${alertMsg}')">FC</text>`;
             }
         }
@@ -548,14 +574,16 @@ function renderMatrixZanjas() {
     const arcoNameZA = document.getElementById('summary-arco-name-za');
     if (arcoNameZA) arcoNameZA.innerText = `Arco ${arco.replace('ARC','')}`;
     
+    const allMetros = Object.values(metrosPorTipo).reduce((a, b) => a + b, 0);
     const setTxt = (id, val) => { const el = document.getElementById(id); if(el) el.innerText = val; };
-    setTxt('sum-za-metros', Math.round(zanjaMetrosTotal) + " m");
+    setTxt('sum-za-metros', Math.round(allMetros) + " m");
+    setTxt('sum-za-metros-mini', Math.round(allMetros) + " m");
     setTxt('sum-za-mt', Math.round(metrosPorTipo['MT']) + " m");
     setTxt('sum-za-bt', Math.round(metrosPorTipo['BT']) + " m");
     setTxt('sum-za-ssaa', Math.round(metrosPorTipo['SSAA']) + " m");
     setTxt('sum-za-pat', Math.round(metrosPorTipo['PAT']) + " m");
+    setTxt('sum-za-cctv', Math.round(metrosPorTipo['CCTV']) + " m");
     setTxt('sum-za-entradaps', Math.round(metrosPorTipo['ENTRADA_PS']) + " m");
-    setTxt('sum-za-otras', Math.round(metrosPorTipo['OTRAS']) + " m");
     setTxt('sum-pt-arqueta', countsPT.arqueta);
     setTxt('sum-pt-gateway', countsPT.gateway);
     setTxt('sum-pt-mbox', countsPT.mbox);
@@ -567,6 +595,34 @@ function renderMatrixZanjas() {
     
     initPanZoomZanjas(); 
 }
+
+function toggleZAPanel() {
+    zaPanelCollapsed = !zaPanelCollapsed;
+    const body = document.getElementById('za-panel-body');
+    const icon = document.getElementById('za-toggle-icon');
+    const viewport = document.getElementById('zanjas-viewport');
+    if (body) body.classList.toggle('collapsed', zaPanelCollapsed);
+    if (icon) icon.classList.toggle('collapsed', zaPanelCollapsed);
+    if (viewport) viewport.classList.toggle('za-panel-collapsed', zaPanelCollapsed);
+}
+
+function toggleZALayer(category, key) {
+    zaLayerState[category][key] = !zaLayerState[category][key];
+    if (currentAppMode === 'ZA') renderMatrixZanjas();
+}
+
+function toggleZALayerDropdown() {
+    const dd = document.getElementById('za-layer-dropdown');
+    if (dd) dd.classList.toggle('show');
+}
+
+document.addEventListener('click', function(e) {
+    const dd = document.getElementById('za-layer-dropdown');
+    const btn = document.getElementById('za-layer-btn');
+    if (dd && btn && !btn.contains(e.target) && !dd.contains(e.target)) {
+        dd.classList.remove('show');
+    }
+});
 
 function initPanZoomZanjas() {
     const viewport = document.getElementById('zanjas-viewport'); 
