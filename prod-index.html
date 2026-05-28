@@ -25,6 +25,37 @@
         .sum-item span { font-size: 10px !important; margin-bottom: 2px !important; }
         .sum-item strong { font-size: 13px !important; }
 
+        /* COLLAPSIBLE ZA PANEL */
+        #za-panel-toggle {
+            cursor: pointer; display: flex; align-items: center; justify-content: space-between; padding: 6px 4px; user-select: none; border-radius: 4px;
+        }
+        #za-panel-toggle:hover { background: #f1f5f9; }
+        #za-panel-toggle .toggle-icon { transition: transform 0.2s; display: inline-block; }
+        #za-panel-toggle .toggle-icon.collapsed { transform: rotate(-90deg); }
+        #za-panel-body { overflow: hidden; transition: max-height 0.3s ease; }
+        #za-panel-body.collapsed { max-height: 0 !important; padding-top: 0 !important; padding-bottom: 0 !important; margin: 0 !important; border: none !important; }
+        #za-panel-body.collapsed > * { display: none; }
+        #zanjas-viewport.za-panel-collapsed { height: calc(100vh - 80px) !important; }
+
+        /* LAYER FILTER DROPDOWN */
+        #za-layer-container { position: relative; display: none; margin-left: 10px; border-left: 2px solid #cbd5e1; padding-left: 10px; align-items: center; }
+        #za-layer-btn {
+            background: #fff; border: 1px solid #cbd5e1; border-radius: 5px; padding: 6px 10px; font-size: 12px; font-weight: bold; cursor: pointer; color: #475569;
+            display: flex; align-items: center; gap: 5px;
+        }
+        #za-layer-btn:hover { background: #f1f5f9; }
+        #za-layer-dropdown {
+            display: none; position: absolute; top: 100%; left: 0; background: white; border: 1px solid #cbd5e1; border-radius: 6px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15); padding: 10px; z-index: 100; min-width: 220px; margin-top: 4px;
+        }
+        #za-layer-dropdown.show { display: block; }
+        .za-layer-group { margin-bottom: 8px; }
+        .za-layer-group:last-child { margin-bottom: 0; }
+        .za-layer-group-title { font-size: 11px; font-weight: bold; color: #64748b; margin-bottom: 4px; border-bottom: 1px solid #e2e8f0; padding-bottom: 2px; }
+        .za-layer-item { display: flex; align-items: center; gap: 6px; padding: 3px 0; font-size: 12px; cursor: pointer; }
+        .za-layer-item input { margin: 0; cursor: pointer; }
+        .za-layer-color-box { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+
         /* LEYENDA ZANJAS */
         #zanjas-types-legend {
             margin-top: 5px;
@@ -39,7 +70,7 @@
             border: 1px solid #e2e8f0;
         }
         .za-legend-item { display: flex; align-items: center; gap: 6px; }
-        .color-box { width: 12px; height: 12px; border-radius: 2px; }
+        .color-box { width: 12px; height: 12px; border-radius: 2px; flex-shrink: 0; }
         .meters-count { margin-left: auto; color: #475569; }
     </style>
 </head>
@@ -108,6 +139,31 @@
                 <span style="font-weight: bold; color: #475569; font-size: 13px;"><i class="fa-regular fa-calendar"></i> Fecha Prod:</span>
                 <input type="date" id="fecha-produccion" style="padding: 5px; border: 1px solid #cbd5e1; border-radius: 5px; outline: none; font-family: inherit; font-weight: bold; color: var(--blue);">
             </div>
+            <div id="za-layer-container">
+                <button id="za-layer-btn" onclick="toggleZALayerDropdown()"><i class="fa-solid fa-layer-group"></i> Capas</button>
+                <div id="za-layer-dropdown">
+                    <div class="za-layer-group">
+                        <div class="za-layer-group-title">Zanjas</div>
+                        <label class="za-layer-item"><input type="checkbox" checked onchange="toggleZALayer('zanja','MT')"><span class="za-layer-color-box" style="background:#ef4444"></span>MT</label>
+                        <label class="za-layer-item"><input type="checkbox" checked onchange="toggleZALayer('zanja','BT')"><span class="za-layer-color-box" style="background:#f59e0b"></span>BT</label>
+                        <label class="za-layer-item"><input type="checkbox" checked onchange="toggleZALayer('zanja','SSAA')"><span class="za-layer-color-box" style="background:#22c55e"></span>SSAA</label>
+                        <label class="za-layer-item"><input type="checkbox" checked onchange="toggleZALayer('zanja','PAT')"><span class="za-layer-color-box" style="background:#ec4899"></span>PAT</label>
+                        <label class="za-layer-item"><input type="checkbox" checked onchange="toggleZALayer('zanja','CCTV')"><span class="za-layer-color-box" style="background:#ca8a04"></span>CCTV</label>
+                        <label class="za-layer-item"><input type="checkbox" checked onchange="toggleZALayer('zanja','ENTRADA_PS')"><span class="za-layer-color-box" style="background:#06b6d4"></span>Entrada PS</label>
+                    </div>
+                    <div class="za-layer-group">
+                        <div class="za-layer-group-title">Puntuales</div>
+                        <label class="za-layer-item"><input type="checkbox" checked onchange="toggleZALayer('puntual','arqueta')">Arquetas</label>
+                        <label class="za-layer-item"><input type="checkbox" checked onchange="toggleZALayer('puntual','gateway')">Gateway</label>
+                        <label class="za-layer-item"><input type="checkbox" checked onchange="toggleZALayer('puntual','mbox')">Mbox</label>
+                        <label class="za-layer-item"><input type="checkbox" checked onchange="toggleZALayer('puntual','tbox')">Tbox</label>
+                        <label class="za-layer-item"><input type="checkbox" checked onchange="toggleZALayer('puntual','meteo')">Meteo</label>
+                        <label class="za-layer-item"><input type="checkbox" checked onchange="toggleZALayer('puntual','csb')">CSB</label>
+                        <label class="za-layer-item"><input type="checkbox" checked onchange="toggleZALayer('puntual','cctv')">CCTV</label>
+                        <label class="za-layer-item"><input type="checkbox" checked onchange="toggleZALayer('puntual','fc')">FC</label>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <main id="matrix-container">
@@ -133,56 +189,61 @@
         </div>
 
         <div id="summary-panel-za" class="summary-panel" style="display: none;">
-            <h3>Resumen de Obra Civil: <span id="summary-arco-name-za">-</span></h3>
-            <div class="summary-grid" style="grid-template-columns: 1fr;">
-                <div class="sum-item" style="border-left-color: #1e293b">
-                    <span>Total Metros Lineales (Aprox)</span>
-                    <strong id="sum-za-metros">0 m</strong>
-                </div>
+            <div id="za-panel-toggle" onclick="toggleZAPanel()">
+                <span style="font-weight:bold; font-size:13px;">🔧 Resumen Obra Civil: <span id="summary-arco-name-za">-</span> — Total: <span id="sum-za-metros-mini">0 m</span></span>
+                <span class="toggle-icon" id="za-toggle-icon">▼</span>
             </div>
+            <div id="za-panel-body">
+                <div class="summary-grid" style="grid-template-columns: 1fr;">
+                    <div class="sum-item" style="border-left-color: #1e293b">
+                        <span>Total Metros Lineales (Aprox)</span>
+                        <strong id="sum-za-metros">0 m</strong>
+                    </div>
+                </div>
 
-            <div id="zanjas-types-legend">
-                <div class="za-legend-item" style="color: #ef4444;"><div class="color-box" style="background:#ef4444;"></div>Media Tensión (MT): <span class="meters-count" id="sum-za-mt">0 m</span></div>
-                <div class="za-legend-item" style="color: #f59e0b;"><div class="color-box" style="background:#f59e0b;"></div>Baja Tensión (BT): <span class="meters-count" id="sum-za-bt">0 m</span></div>
-                <div class="za-legend-item" style="color: #22c55e;"><div class="color-box" style="background:#22c55e;"></div>SSAA / Auxiliares: <span class="meters-count" id="sum-za-ssaa">0 m</span></div>
-                <div class="za-legend-item" style="color: #ec4899;"><div class="color-box" style="background:#ec4899;"></div>PAT (Zanjas G): <span class="meters-count" id="sum-za-pat">0 m</span></div>
-                <div class="za-legend-item" style="color: #06b6d4;"><div class="color-box" style="background:#06b6d4;"></div>Entrada PS: <span class="meters-count" id="sum-za-entradaps">0 m</span></div>
-                <div class="za-legend-item" style="color: #ca8a04;"><div class="color-box" style="background:#ca8a04;"></div>CCTV (FO+PWR): <span class="meters-count" id="sum-za-otras">0 m</span></div>
-            </div>
+                <div id="zanjas-types-legend">
+                    <div class="za-legend-item" style="color: #ef4444;"><div class="color-box" style="background:#ef4444;"></div>Media Tensión (MT): <span class="meters-count" id="sum-za-mt">0 m</span></div>
+                    <div class="za-legend-item" style="color: #f59e0b;"><div class="color-box" style="background:#f59e0b;"></div>Baja Tensión (BT): <span class="meters-count" id="sum-za-bt">0 m</span></div>
+                    <div class="za-legend-item" style="color: #22c55e;"><div class="color-box" style="background:#22c55e;"></div>SSAA / Auxiliares: <span class="meters-count" id="sum-za-ssaa">0 m</span></div>
+                    <div class="za-legend-item" style="color: #ec4899;"><div class="color-box" style="background:#ec4899;"></div>PAT (Zanjas G): <span class="meters-count" id="sum-za-pat">0 m</span></div>
+                    <div class="za-legend-item" style="color: #ca8a04;"><div class="color-box" style="background:#ca8a04;"></div>CCTV (FO+PWR): <span class="meters-count" id="sum-za-cctv">0 m</span></div>
+                    <div class="za-legend-item" style="color: #06b6d4;"><div class="color-box" style="background:#06b6d4;"></div>Entrada PS: <span class="meters-count" id="sum-za-entradaps">0 m</span></div>
+                </div>
 
-            <h3 style="margin-top: 10px; border-top: 1px solid #e2e8f0; padding-top: 8px;">Elementos Puntuales</h3>
-            <div class="summary-grid" style="grid-template-columns: repeat(4, 1fr);">
-                <div class="sum-item" style="border-left-color: #000">
-                    <span>Arquetas <svg width="12" height="12" style="vertical-align:middle;margin-left:3px;"><rect x="1" y="1" width="10" height="10" fill="none" stroke="#000" stroke-width="2"/></svg></span>
-                    <strong id="sum-pt-arqueta">0</strong>
-                </div>
-                <div class="sum-item" style="border-left-color: #000">
-                    <span>GATEWAY <svg width="12" height="12" style="vertical-align:middle;margin-left:3px;"><path d="M 6,1 L 11,11 L 1,11 Z" fill="none" stroke="#000" stroke-width="2"/><circle cx="6" cy="7.5" r="1.5" fill="#000"/></svg></span>
-                    <strong id="sum-pt-gateway">0</strong>
-                </div>
-                <div class="sum-item" style="border-left-color: #000">
-                    <span>MBOX <svg width="12" height="12" style="vertical-align:middle;margin-left:3px;"><path d="M 6,1 L 11,11 L 1,11 Z" fill="none" stroke="#000" stroke-width="2"/><circle cx="6" cy="7.5" r="1.5" fill="#000"/></svg></span>
-                    <strong id="sum-pt-mbox">0</strong>
-                </div>
-                <div class="sum-item" style="border-left-color: #000">
-                    <span>TBOX <svg width="12" height="12" style="vertical-align:middle;margin-left:3px;"><path d="M 6,1 L 11,11 L 1,11 Z" fill="none" stroke="#000" stroke-width="2"/><circle cx="6" cy="7.5" r="1.5" fill="#000"/></svg></span>
-                    <strong id="sum-pt-tbox">0</strong>
-                </div>
-                <div class="sum-item" style="border-left-color: #000">
-                    <span>METEO <svg width="12" height="12" style="vertical-align:middle;margin-left:3px;"><path d="M 6,1 L 11,11 L 1,11 Z" fill="none" stroke="#000" stroke-width="2"/><circle cx="6" cy="7.5" r="1.5" fill="#000"/></svg></span>
-                    <strong id="sum-pt-meteo">0</strong>
-                </div>
-                <div class="sum-item" style="border-left-color: #000">
-                    <span>CSB <svg width="12" height="12" style="vertical-align:middle;margin-left:3px;"><path d="M 6,1 L 11,11 L 1,11 Z" fill="none" stroke="#000" stroke-width="2"/><circle cx="6" cy="7.5" r="1.5" fill="#000"/></svg></span>
-                    <strong id="sum-pt-csb">0</strong>
-                </div>
-                <div class="sum-item" style="border-left-color: #000">
-                    <span>CCTV <svg width="12" height="12" style="vertical-align:middle;margin-left:3px;"><circle cx="6" cy="6" r="5" fill="none" stroke="#000" stroke-width="1.5"/><path d="M 2.5,2.5 L 9.5,9.5 M 2.5,9.5 L 9.5,2.5" stroke="#000" stroke-width="1.5"/></svg></span>
-                    <strong id="sum-pt-cctv">0</strong>
-                </div>
-                <div class="sum-item" style="border-left-color: #000">
-                    <span style="font-weight:900;">Tuberías FC</span>
-                    <strong id="sum-pt-fc">0</strong>
+                <h3 style="margin-top: 10px; border-top: 1px solid #e2e8f0; padding-top: 8px;">Elementos Puntuales</h3>
+                <div class="summary-grid" style="grid-template-columns: repeat(4, 1fr);">
+                    <div class="sum-item" style="border-left-color: #000">
+                        <span>Arquetas <svg width="12" height="12" style="vertical-align:middle;margin-left:3px;"><rect x="1" y="1" width="10" height="10" fill="none" stroke="#000" stroke-width="2"/></svg></span>
+                        <strong id="sum-pt-arqueta">0</strong>
+                    </div>
+                    <div class="sum-item" style="border-left-color: #000">
+                        <span>GATEWAY <svg width="12" height="12" style="vertical-align:middle;margin-left:3px;"><path d="M 6,1 L 11,11 L 1,11 Z" fill="none" stroke="#000" stroke-width="2"/><circle cx="6" cy="7.5" r="1.5" fill="#000"/></svg></span>
+                        <strong id="sum-pt-gateway">0</strong>
+                    </div>
+                    <div class="sum-item" style="border-left-color: #000">
+                        <span>MBOX <svg width="12" height="12" style="vertical-align:middle;margin-left:3px;"><path d="M 6,1 L 11,11 L 1,11 Z" fill="none" stroke="#000" stroke-width="2"/><circle cx="6" cy="7.5" r="1.5" fill="#000"/></svg></span>
+                        <strong id="sum-pt-mbox">0</strong>
+                    </div>
+                    <div class="sum-item" style="border-left-color: #000">
+                        <span>TBOX <svg width="12" height="12" style="vertical-align:middle;margin-left:3px;"><path d="M 6,1 L 11,11 L 1,11 Z" fill="none" stroke="#000" stroke-width="2"/><circle cx="6" cy="7.5" r="1.5" fill="#000"/></svg></span>
+                        <strong id="sum-pt-tbox">0</strong>
+                    </div>
+                    <div class="sum-item" style="border-left-color: #000">
+                        <span>METEO <svg width="12" height="12" style="vertical-align:middle;margin-left:3px;"><path d="M 6,1 L 11,11 L 1,11 Z" fill="none" stroke="#000" stroke-width="2"/><circle cx="6" cy="7.5" r="1.5" fill="#000"/></svg></span>
+                        <strong id="sum-pt-meteo">0</strong>
+                    </div>
+                    <div class="sum-item" style="border-left-color: #000">
+                        <span>CSB <svg width="12" height="12" style="vertical-align:middle;margin-left:3px;"><path d="M 6,1 L 11,11 L 1,11 Z" fill="none" stroke="#000" stroke-width="2"/><circle cx="6" cy="7.5" r="1.5" fill="#000"/></svg></span>
+                        <strong id="sum-pt-csb">0</strong>
+                    </div>
+                    <div class="sum-item" style="border-left-color: #000">
+                        <span>CCTV <svg width="12" height="12" style="vertical-align:middle;margin-left:3px;"><circle cx="6" cy="6" r="5" fill="none" stroke="#000" stroke-width="1.5"/><path d="M 2.5,2.5 L 9.5,9.5 M 2.5,9.5 L 9.5,2.5" stroke="#000" stroke-width="1.5"/></svg></span>
+                        <strong id="sum-pt-cctv">0</strong>
+                    </div>
+                    <div class="sum-item" style="border-left-color: #000">
+                        <span style="font-weight:900;">Tuberías FC</span>
+                        <strong id="sum-pt-fc">0</strong>
+                    </div>
                 </div>
             </div>
         </div>
