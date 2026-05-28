@@ -548,15 +548,14 @@ function renderMatrixZanjas() {
     const arcoNameZA = document.getElementById('summary-arco-name-za');
     if (arcoNameZA) arcoNameZA.innerText = `Arco ${arco.replace('ARC','')}`;
     
-    document.getElementById('sum-za-metros').innerText = Math.round(zanjaMetrosTotal) + " m";
-    document.getElementById('sum-za-mt').innerText = Math.round(metrosPorTipo['MT']) + " m";
-    document.getElementById('sum-za-bt').innerText = Math.round(metrosPorTipo['BT']) + " m";
-    document.getElementById('sum-za-ssaa').innerText = Math.round(metrosPorTipo['SSAA']) + " m";
-    document.getElementById('sum-za-pat').innerText = Math.round(metrosPorTipo['PAT']) + " m";
-    document.getElementById('sum-za-entradaps').innerText = Math.round(metrosPorTipo['ENTRADA_PS']) + " m";
-    document.getElementById('sum-za-otras').innerText = Math.round(metrosPorTipo['OTRAS']) + " m";
-
     const setTxt = (id, val) => { const el = document.getElementById(id); if(el) el.innerText = val; };
+    setTxt('sum-za-metros', Math.round(zanjaMetrosTotal) + " m");
+    setTxt('sum-za-mt', Math.round(metrosPorTipo['MT']) + " m");
+    setTxt('sum-za-bt', Math.round(metrosPorTipo['BT']) + " m");
+    setTxt('sum-za-ssaa', Math.round(metrosPorTipo['SSAA']) + " m");
+    setTxt('sum-za-pat', Math.round(metrosPorTipo['PAT']) + " m");
+    setTxt('sum-za-entradaps', Math.round(metrosPorTipo['ENTRADA_PS']) + " m");
+    setTxt('sum-za-otras', Math.round(metrosPorTipo['OTRAS']) + " m");
     setTxt('sum-pt-arqueta', countsPT.arqueta);
     setTxt('sum-pt-gateway', countsPT.gateway);
     setTxt('sum-pt-mbox', countsPT.mbox);
@@ -581,8 +580,9 @@ function initPanZoomZanjas() {
         if (currentAppMode !== 'ZA') return;
         e.preventDefault();
         isDragging = true;
-        const clientX = e.clientX || (e.touches && e.touches[0].clientX);
-        const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+        const clientX = e.clientX !== undefined ? e.clientX : (e.touches && e.touches[0].clientX);
+        const clientY = e.clientY !== undefined ? e.clientY : (e.touches && e.touches[0].clientY);
+        if (clientX === undefined || clientY === undefined) return;
         startX = clientX - pzPointX;
         startY = clientY - pzPointY;
         viewport.style.cursor = 'grabbing';
@@ -591,8 +591,9 @@ function initPanZoomZanjas() {
     const onMove = (e) => {
         if (!isDragging || currentAppMode !== 'ZA') return;
         e.preventDefault();
-        const clientX = e.clientX || (e.touches && e.touches[0].clientX);
-        const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+        const clientX = e.clientX !== undefined ? e.clientX : (e.touches && e.touches[0].clientX);
+        const clientY = e.clientY !== undefined ? e.clientY : (e.touches && e.touches[0].clientY);
+        if (clientX === undefined || clientY === undefined) return;
         pzPointX = clientX - startX;
         pzPointY = clientY - startY;
         layer.style.transform = `translate(${pzPointX}px, ${pzPointY}px) scale(${pzScale})`;
