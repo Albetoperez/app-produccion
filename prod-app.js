@@ -445,8 +445,8 @@ function renderMatrixZanjas() {
         
         svgHtml += `<line x1="${pxX1}" y1="${pxY1}" x2="${pxX2}" y2="${pxY2}" stroke="${strokeColor}" stroke-width="${grosorFinal}" stroke-linecap="round" style="pointer-events:auto; cursor:pointer;" onclick="alert('${zAlertMsg}')"></line>`;
 
-        // Efecto AutoCAD SSAA integrado y protegido
-        if (type === 'SSAA') {
+        // Efecto AutoCAD con etiquetas de tipo a lo largo de la línea (excepto ENTRADA_PS)
+        if (type !== 'ENTRADA_PS') {
             const pLen = Math.sqrt(Math.pow(pxX2 - pxX1, 2) + Math.pow(pxY2 - pxY1, 2));
             if (pLen > 40) { 
                 const numTexts = Math.max(1, Math.floor(pLen / 100)); 
@@ -457,7 +457,7 @@ function renderMatrixZanjas() {
                     let f = i / (numTexts + 1);
                     let cx = pxX1 + (pxX2 - pxX1) * f;
                     let cy = pxY1 + (pxY2 - pxY1) * f;
-                    svgHtml += `<text class="za-cut-text" x="${cx}" y="${cy}" fill="${strokeColor}" font-size="${10 / pzScale}" font-weight="900" font-family="sans-serif" text-anchor="middle" dominant-baseline="central" transform="rotate(${angle}, ${cx}, ${cy})" style="pointer-events:none;" paint-order="stroke" stroke="#f8fafc" stroke-width="${5 / pzScale}">SSAA</text>`;
+                    svgHtml += `<text class="za-cut-text" x="${cx}" y="${cy}" fill="${strokeColor}" font-size="${10 / pzScale}" font-weight="900" font-family="sans-serif" text-anchor="middle" dominant-baseline="central" transform="rotate(${angle}, ${cx}, ${cy})" style="pointer-events:none;" paint-order="stroke" stroke="#f8fafc" stroke-width="${5 / pzScale}">${type}</text>`;
                 }
             }
         }
