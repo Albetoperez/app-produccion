@@ -387,6 +387,7 @@ function normalizeZanjaType(ref) {
     if (r.includes('SSAA')) return 'SSAA';
     if (r.includes('ZANJA G') || r.includes('ZANJA-G') || r.includes('ZANJA_G')) return 'PAT';
     if (r.includes('CCTV')) return 'CCTV';
+    if (r.includes('LEA')) return 'CCTV';
     return 'OTRAS';
 }
 
