@@ -202,7 +202,7 @@ function flexibleFind(row, ...candidates) {
         const trimmed = name.trim();
         if (row[trimmed] !== undefined && row[trimmed] !== null && row[trimmed] !== '') return row[trimmed];
         const nameNorm = norm(trimmed);
-        const match = keys.find(k => norm(k) === nameNorm || norm(k).includes(nameNorm));
+        const match = keys.find(k => norm(k) === nameNorm);
         if (match !== undefined && row[match] !== undefined && row[match] !== null && row[match] !== '') return row[match];
     }
     return undefined;
@@ -226,10 +226,10 @@ function procesarDatosJSON(data, fileArco) {
         for (let key in rawRow) row[stripAccents(key).trim().toUpperCase()] = rawRow[key];
         
         // 1. ZANJAS (Lector flexible restaurado)
-        const xInicio = flexibleFind(row, 'X INICIO', 'X_INICIO', 'X-INICIO', 'X INI', 'XINI', 'XSTART');
-        const yInicio = flexibleFind(row, 'Y INICIO', 'Y_INICIO', 'Y-INICIO', 'Y INI', 'YINI', 'YSTART');
-        const xFin = flexibleFind(row, 'X FIN', 'X_FIN', 'X-FIN', 'X FINAL', 'XEND');
-        const yFin = flexibleFind(row, 'Y FIN', 'Y_FIN', 'Y-FIN', 'Y FINAL', 'YEND');
+        const xInicio = flexibleFind(row, 'X INICIO', 'X_INICIO', 'X-INICIO', 'X INI', 'XINI', 'XSTART', 'X1', 'X_COMIENZO', 'X_DESDE', 'X_ORIGEN', 'X_I');
+        const yInicio = flexibleFind(row, 'Y INICIO', 'Y_INICIO', 'Y-INICIO', 'Y INI', 'YINI', 'YSTART', 'Y1', 'Y_COMIENZO', 'Y_DESDE', 'Y_ORIGEN', 'Y_I');
+        const xFin = flexibleFind(row, 'X FIN', 'X_FIN', 'X-FIN', 'X FINAL', 'XEND', 'X2', 'X_FINAL', 'X_HASTA', 'X_DESTINO', 'X_F');
+        const yFin = flexibleFind(row, 'Y FIN', 'Y_FIN', 'Y-FIN', 'Y FINAL', 'YEND', 'Y2', 'Y_FINAL', 'Y_HASTA', 'Y_DESTINO', 'Y_F');
         if (xInicio !== undefined && yInicio !== undefined && xFin !== undefined && yFin !== undefined) {
             const x1 = parseCoord(xInicio), y1 = parseCoord(yInicio);
             const x2 = parseCoord(xFin), y2 = parseCoord(yFin);
@@ -306,6 +306,10 @@ function procesarDatosJSON(data, fileArco) {
 function actualizarSelectores(arcoPreferido) {
     let arcos = new Set();
     Object.values(PARQUE_MASTER).forEach(tr => { if(tr.arco) arcos.add(tr.arco); });
+    Object.values(PARQUE_ZANJAS).forEach(z => { if(z.arco) arcos.add(z.arco); });
+    Object.values(PARQUE_PUNTUALES).forEach(p => { if(p.arco) arcos.add(p.arco); });
+    Object.values(PARQUE_CAJAS).forEach(c => { if(c.arco) arcos.add(c.arco); });
+    Object.values(PARQUE_ESTACIONES).forEach(e => { if(e.arco) arcos.add(e.arco); });
     const selectArco = document.getElementById('select-arco');
     const valorAntes = selectArco.value;
     if (arcos.size === 0) {
