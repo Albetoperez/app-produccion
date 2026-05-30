@@ -141,18 +141,6 @@ async function importarArchivos(input) {
     if (btn) btn.innerText = "⏳ Procesando...";
     let ultimoArcoDetectado = '';
 
-    // Backup por si la importación falla o no reconoce datos
-    const backup = {
-        PARQUE_MASTER, PARQUE_ESTACIONES, PARQUE_CAJAS, PARQUE_ZANJAS, PARQUE_PUNTUALES,
-    };
-
-    // Limpiar datos globales para evitar mezclar con datos antiguos de localforage
-    PARQUE_MASTER = {};
-    PARQUE_ESTACIONES = {};
-    PARQUE_CAJAS = {};
-    PARQUE_ZANJAS = {};
-    PARQUE_PUNTUALES = {};
-
     const MAX_FILE_SIZE = 20 * 1024 * 1024;
 
     for (let i = 0; i < files.length; i++) {
@@ -183,32 +171,7 @@ async function importarArchivos(input) {
     }
     console.log(`📦 Resultado: Master=${Object.keys(PARQUE_MASTER).length}, Zanj=${Object.keys(PARQUE_ZANJAS).length}, Pt=${Object.keys(PARQUE_PUNTUALES).length}, Est=${Object.keys(PARQUE_ESTACIONES).length}, Cajas=${Object.keys(PARQUE_CAJAS).length}`);
 
-    // Si no se produjo ningún dato, restaurar backup y no tocar localforage
-    const hasData = Object.keys(PARQUE_MASTER).length > 0 ||
-                    Object.keys(PARQUE_ESTACIONES).length > 0 ||
-                    Object.keys(PARQUE_CAJAS).length > 0 ||
-                    Object.keys(PARQUE_ZANJAS).length > 0 ||
-                    Object.keys(PARQUE_PUNTUALES).length > 0;
-
-    if (!hasData) {
-        PARQUE_MASTER = backup.PARQUE_MASTER;
-        PARQUE_ESTACIONES = backup.PARQUE_ESTACIONES;
-        PARQUE_CAJAS = backup.PARQUE_CAJAS;
-        PARQUE_ZANJAS = backup.PARQUE_ZANJAS;
-        PARQUE_PUNTUALES = backup.PARQUE_PUNTUALES;
-        if (btn) btn.innerText = "❌ No se reconoció el formato";
-        setTimeout(() => { if (btn) btn.innerText = "📂 Cargar Listados"; }, 2000);
-        input.value = '';
-        return;
-    }
-
     try {
-        // Limpiar localforage antes de guardar datos frescos
-        await localforage.removeItem('PARQUE_MASTER_DATA');
-        await localforage.removeItem('PARQUE_ESTACIONES_DATA');
-        await localforage.removeItem('PARQUE_CAJAS_DATA');
-        await localforage.removeItem('PARQUE_ZANJAS_DATA');
-        await localforage.removeItem('PARQUE_PUNTUALES_DATA');
         await localforage.setItem('PARQUE_MASTER_DATA', PARQUE_MASTER);
         await localforage.setItem('PARQUE_ESTACIONES_DATA', PARQUE_ESTACIONES);
         await localforage.setItem('PARQUE_CAJAS_DATA', PARQUE_CAJAS);
