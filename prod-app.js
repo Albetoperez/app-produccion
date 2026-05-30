@@ -188,12 +188,24 @@ function detectarArco(id) {
     return match ? `ARC${match[1] || match[2]}` : 'S/A';
 }
 
+function flexibleFind(row, ...candidates) {
+    const keys = Object.keys(row);
+    const norm = (s) => s.toUpperCase().replace(/[\s\-\_]+/g, '');
+    for (const name of candidates) {
+        if (row[name] !== undefined && row[name] !== null && row[name] !== '') return row[name];
+        const nameNorm = norm(name);
+        const match = keys.find(k => norm(k) === nameNorm || norm(k).includes(nameNorm));
+        if (match !== undefined && row[match] !== undefined && row[match] !== null && row[match] !== '') return row[match];
+    }
+    return undefined;
+}
+
 function procesarDatosJSON(data, fileArco) {
     let arcoEnEsteArchivo = fileArco || '';
     
     if (!arcoEnEsteArchivo) {
         for (let i = 0; i < data.length; i++) {
-            let val = String(data[i]['CODIGO'] || data[i]['REFERENCIA'] || data[i]['TIPO'] || data[i]['CAPA'] || '').toUpperCase();
+            let val = String(flexibleFind(data[i], 'CODIGO', 'REFERENCIA', 'TIPO', 'CAPA') || '').toUpperCase();
             let m = val.match(/ARCO\s*(\d+)|ARC\s*(\d+)/);
             if (m) { arcoEnEsteArchivo = `ARC${m[1] || m[2]}`; break; }
         }
@@ -205,10 +217,14 @@ function procesarDatosJSON(data, fileArco) {
         for (let key in rawRow) row[key.trim().toUpperCase()] = rawRow[key];
         
         // 1. ZANJAS (Lector flexible restaurado)
-        if (row['X INICIO'] !== undefined && row['Y INICIO'] !== undefined && row['X FIN'] !== undefined && row['Y FIN'] !== undefined) {
-            const x1 = parseCoord(row['X INICIO']), y1 = parseCoord(row['Y INICIO']);
-            const x2 = parseCoord(row['X FIN']), y2 = parseCoord(row['Y FIN']);
-            const ref = row['REFERENCIA'] || row['REFERENCIA (LINEAL)'] || row['TIPO'] || row['CAPA'] || 'ZANJA';
+        const xInicio = flexibleFind(row, 'X INICIO', 'X_INICIO', 'X-INICIO', 'X INI', 'XINI', 'XSTART');
+        const yInicio = flexibleFind(row, 'Y INICIO', 'Y_INICIO', 'Y-INICIO', 'Y INI', 'YINI', 'YSTART');
+        const xFin = flexibleFind(row, 'X FIN', 'X_FIN', 'X-FIN', 'X FINAL', 'XEND');
+        const yFin = flexibleFind(row, 'Y FIN', 'Y_FIN', 'Y-FIN', 'Y FINAL', 'YEND');
+        if (xInicio !== undefined && yInicio !== undefined && xFin !== undefined && yFin !== undefined) {
+            const x1 = parseCoord(xInicio), y1 = parseCoord(yInicio);
+            const x2 = parseCoord(xFin), y2 = parseCoord(yFin);
+            const ref = flexibleFind(row, 'REFERENCIA', 'REFERENCIA (LINEAL)', 'REFERENCIA LINEAL', 'REF', 'TIPO', 'TIPO ZANJA', 'TIPO_ZANJA', 'CAPA', 'DESCRIPCION', 'ZANJA') || 'ZANJA';
             
             if (x1 !== 0 && y1 !== 0 && x2 !== 0 && y2 !== 0) {
                 const safeRef = String(ref).replace(/[\.\-\s]/g, '_'); 
@@ -219,11 +235,11 @@ function procesarDatosJSON(data, fileArco) {
         }
 
         // 2. ELEMENTOS PUNTUALES (Lector flexible restaurado)
-        const refPuntual = row['REFERENCIA'] || row['CODIGO'] || row['TIPO'] || row['CAPA'];
-        const xp = parseCoord(row['X']);
-        const yp = parseCoord(row['Y']);
+        const refPuntual = flexibleFind(row, 'REFERENCIA', 'CODIGO', 'TIPO', 'CAPA');
+        const xp = parseCoord(flexibleFind(row, 'X', 'X_INICIO', 'X INICIO') || 0);
+        const yp = parseCoord(flexibleFind(row, 'Y', 'Y_INICIO', 'Y INICIO') || 0);
         
-        if (refPuntual && xp !== 0 && yp !== 0 && row['FILA'] === undefined && row['HINCA'] === undefined && !String(refPuntual).toUpperCase().includes('-SB-') && !String(refPuntual).toUpperCase().includes('-PS-')) {
+        if (refPuntual && xp !== 0 && yp !== 0 && flexibleFind(row, 'FILA') === undefined && flexibleFind(row, 'HINCA') === undefined && !String(refPuntual).toUpperCase().includes('-SB-') && !String(refPuntual).toUpperCase().includes('-PS-')) {
             const upRef = String(refPuntual).toUpperCase();
             if (upRef.includes('ARQUETA') || upRef.includes('BÁCULO') || upRef.includes('BACULO') || upRef.includes('PVH') || upRef.includes('TORRE') || upRef.includes('AGRUPAMIENTO') || upRef.includes('FC-') || upRef.includes('GATEWAY') || upRef.includes('MBOX') || upRef.includes('TBOX') || upRef.includes('METEO') || upRef.includes('CSB') || upRef.includes('CCTV')) {
                 const safePRef = String(upRef).replace(/[\.\-\s]/g, '_'); 
@@ -234,8 +250,8 @@ function procesarDatosJSON(data, fileArco) {
         }
 
         // 3. TRACKERS Y CAJAS SCB
-        const tId = row['CODIGO'] || row['REFERENCIA'] || row['TIPO'] || row['CAPA'];
-        const rawX = row['X'], rawY = row['Y'];
+        const tId = flexibleFind(row, 'CODIGO', 'REFERENCIA', 'TIPO', 'CAPA');
+        const rawX = flexibleFind(row, 'X', 'X_INICIO', 'X INICIO'), rawY = flexibleFind(row, 'Y', 'Y_INICIO', 'Y INICIO');
         
         if (!tId || rawX === undefined || rawY === undefined) return;
         const tIdStr = String(tId).trim().toUpperCase();
@@ -244,7 +260,7 @@ function procesarDatosJSON(data, fileArco) {
         const x = parseCoord(rawX), y = parseCoord(rawY);
         if (x === 0 && y === 0) return;
 
-        if (row['PUNTO'] !== undefined || tIdStr.includes('-PS-')) {
+        if (flexibleFind(row, 'PUNTO') !== undefined || tIdStr.includes('-PS-')) {
             const match = tIdStr.match(/ARCO\s*(\d+)|ARC\s*(\d+)/);
             const arcoPS = match ? `ARC${match[1] || match[2]}` : 'S/A';
             const blockPS = tIdStr.split('-').pop().trim();
@@ -263,7 +279,7 @@ function procesarDatosJSON(data, fileArco) {
             return; 
         }
 
-        const block = row['BLOQUE'] || 'S/B', filaNum = row['FILA'], hincaIndex = row['HINCA'];
+        const block = flexibleFind(row, 'BLOQUE', 'BLOCK', 'ZONA', 'SECTOR') || 'S/B', filaNum = flexibleFind(row, 'FILA', 'ROW', 'LINEA'), hincaIndex = flexibleFind(row, 'HINCA', 'POSTE', 'HINCA N.', 'Nº HINCA');
         if (filaNum === undefined || filaNum === null || hincaIndex === undefined || hincaIndex === null) return;
         const arcoId = detectarArco(tIdStr);
 
@@ -461,12 +477,12 @@ function initPanEM() {
 }
 
 function normalizeZanjaType(ref) {
-    const r = String(ref).toUpperCase();
-    if (r.includes('ENTRADA-PS') || r.includes('ENTRADA PS') || r.includes('ENTRADAPS')) return 'ENTRADA_PS';
+    const r = String(ref).toUpperCase().replace(/[\s\-\_\.]+/g, '');
+    if (r.includes('ENTRADAPS')) return 'ENTRADA_PS';
     if (r.includes('MT')) return 'MT';
     if (r.includes('BT')) return 'BT';
     if (r.includes('SSAA')) return 'SSAA';
-    if (r.includes('ZANJA G') || r.includes('ZANJA-G') || r.includes('ZANJA_G')) return 'PAT';
+    if (r.includes('ZANJAG')) return 'PAT';
     if (r.includes('CCTV')) return 'CCTV';
     if (r.includes('LEA')) return 'CCTV';
     return 'OTRAS';
