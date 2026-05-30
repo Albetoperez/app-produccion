@@ -18,7 +18,7 @@ let pzPointY = 0;
 
 let zaPanelCollapsed = false;
 let zaLayerState = {
-    zanja: { 'MT': true, 'BT': true, 'SSAA': true, 'PAT': true, 'CCTV': true, 'ENTRADA_PS': true },
+        zanja: { 'MT': true, 'BT': true, 'SSAA': true, 'PAT': true, 'CCTV': true, 'ENTRADA_PS': true, 'OTRAS': true },
     puntual: { 'arqueta': true, 'gateway': true, 'mbox': true, 'tbox': true, 'meteo': true, 'csb': true, 'cctv': true } 
 };
 
@@ -554,7 +554,7 @@ function renderMatrixZanjas() {
         
         let svgParts = [`<svg style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:10;">`];
         
-        let metrosPorTipo = { 'MT': 0, 'BT': 0, 'SSAA': 0, 'PAT': 0, 'CCTV': 0, 'ENTRADA_PS': 0 };
+        let metrosPorTipo = { 'MT': 0, 'BT': 0, 'SSAA': 0, 'PAT': 0, 'CCTV': 0, 'ENTRADA_PS': 0, 'OTRAS': 0 };
         
         zValues.forEach(z => {
             const dx = z.x2 - z.x1; const dy = z.y2 - z.y1;
@@ -708,6 +708,7 @@ function renderMatrixZanjas() {
         setTxt('sum-za-pat', Math.round(metrosPorTipo['PAT']) + " m");
         setTxt('sum-za-cctv', Math.round(metrosPorTipo['CCTV']) + " m");
         setTxt('sum-za-entradaps', Math.round(metrosPorTipo['ENTRADA_PS']) + " m");
+        setTxt('sum-za-otras', Math.round(metrosPorTipo['OTRAS']) + " m");
         
         setTxt('sum-pt-arqueta', countsPT.arqueta);
         setTxt('sum-pt-gateway', countsPT.gateway);
