@@ -161,6 +161,7 @@ async function importarArchivos(input) {
         
         const fileArcoMatch = file.name.toUpperCase().match(/ARCO\s*(\d+)|ARC\s*(\d+)/);
         const fileArco = fileArcoMatch ? `ARC${fileArcoMatch[1] || fileArcoMatch[2]}` : null;
+        console.log(`📄 Procesando: ${file.name} → ARCO: ${fileArco || 'auto'}`);
 
         const reader = new FileReader();
         await new Promise((resolve) => {
@@ -170,6 +171,7 @@ async function importarArchivos(input) {
                     const workbook = XLSX.read(data, { type: 'array' });
                     let todaLaData = [];
                     workbook.SheetNames.forEach(sheetName => { todaLaData = todaLaData.concat(XLSX.utils.sheet_to_json(workbook.Sheets[sheetName])); });
+                    console.log(`📊 ${file.name}: ${todaLaData.length} filas, columnas: ${todaLaData.length > 0 ? Object.keys(todaLaData[0]).join(', ') : 'vacío'}`);
                     const detectado = procesarDatosJSON(todaLaData, fileArco);
                     if (detectado) ultimoArcoDetectado = detectado;
                 } catch (error) { console.error("Error leyendo Excel:", error); } 
@@ -179,6 +181,7 @@ async function importarArchivos(input) {
             reader.readAsArrayBuffer(file);
         });
     }
+    console.log(`📦 Resultado: Master=${Object.keys(PARQUE_MASTER).length}, Zanj=${Object.keys(PARQUE_ZANJAS).length}, Pt=${Object.keys(PARQUE_PUNTUALES).length}, Est=${Object.keys(PARQUE_ESTACIONES).length}, Cajas=${Object.keys(PARQUE_CAJAS).length}`);
 
     // Si no se produjo ningún dato, restaurar backup y no tocar localforage
     const hasData = Object.keys(PARQUE_MASTER).length > 0 ||
@@ -231,10 +234,11 @@ function stripAccents(s) {
 
 function flexibleFind(row, ...candidates) {
     const keys = Object.keys(row);
-    const norm = (s) => stripAccents(s).toUpperCase().replace(/[\s\-\_]+/g, '');
+    const norm = (s) => stripAccents(s).toUpperCase().replace(/[\s\-\_\.\,\(\)\/\\\+]+/g, '');
     for (const name of candidates) {
-        if (row[name] !== undefined && row[name] !== null && row[name] !== '') return row[name];
-        const nameNorm = norm(name);
+        const trimmed = name.trim();
+        if (row[trimmed] !== undefined && row[trimmed] !== null && row[trimmed] !== '') return row[trimmed];
+        const nameNorm = norm(trimmed);
         const match = keys.find(k => norm(k) === nameNorm || norm(k).includes(nameNorm));
         if (match !== undefined && row[match] !== undefined && row[match] !== null && row[match] !== '') return row[match];
     }
@@ -253,6 +257,7 @@ function procesarDatosJSON(data, fileArco) {
     }
     if (!arcoEnEsteArchivo) arcoEnEsteArchivo = 'S/A';
 
+    let logZ = 0, logP = 0, logM = 0, logE = 0, logSB = 0;
     data.forEach(rawRow => {
         let row = {};
         for (let key in rawRow) row[stripAccents(key).trim().toUpperCase()] = rawRow[key];
@@ -271,6 +276,7 @@ function procesarDatosJSON(data, fileArco) {
                 const safeRef = String(ref).replace(/[\.\-\s]/g, '_'); 
                 const zId = `Z_${x1}_${y1}_${x2}_${y2}_${safeRef}_${arcoEnEsteArchivo}`;
                 PARQUE_ZANJAS[zId] = { id: zId, ref: ref, x1: x1, y1: y1, x2: x2, y2: y2, arco: arcoEnEsteArchivo };
+                logZ++;
             }
             return; 
         }
@@ -286,6 +292,7 @@ function procesarDatosJSON(data, fileArco) {
                 const safePRef = String(upRef).replace(/[\.\-\s]/g, '_'); 
                 const pId = `PT_${xp}_${yp}_${safePRef}_${arcoEnEsteArchivo}`;
                 PARQUE_PUNTUALES[pId] = { id: pId, ref: String(refPuntual), x: xp, y: yp, arco: arcoEnEsteArchivo };
+                logP++;
                 return;
             }
         }
@@ -305,7 +312,7 @@ function procesarDatosJSON(data, fileArco) {
             const match = tIdStr.match(/ARCO\s*(\d+)|ARC\s*(\d+)/);
             const arcoPS = match ? `ARC${match[1] || match[2]}` : 'S/A';
             const blockPS = tIdStr.split('-').pop().trim();
-            if (!PARQUE_ESTACIONES[tIdStr]) { PARQUE_ESTACIONES[tIdStr] = { name: tIdStr, arco: arcoPS, block: blockPS, minX: x, maxX: x, minY: y, maxY: y }; } 
+            if (!PARQUE_ESTACIONES[tIdStr]) { PARQUE_ESTACIONES[tIdStr] = { name: tIdStr, arco: arcoPS, block: blockPS, minX: x, maxX: x, minY: y, maxY: y }; logE++; } 
             else { PARQUE_ESTACIONES[tIdStr].minX = Math.min(PARQUE_ESTACIONES[tIdStr].minX, x); PARQUE_ESTACIONES[tIdStr].maxX = Math.max(PARQUE_ESTACIONES[tIdStr].maxX, x); PARQUE_ESTACIONES[tIdStr].minY = Math.min(PARQUE_ESTACIONES[tIdStr].minY, y); PARQUE_ESTACIONES[tIdStr].maxY = Math.max(PARQUE_ESTACIONES[tIdStr].maxY, y); }
             return; 
         }
@@ -315,20 +322,21 @@ function procesarDatosJSON(data, fileArco) {
             const arcoSB = match ? `ARC${match[1] || match[2]}` : 'S/A';
             const blockRaw = tIdStr.split('-')[2]; 
             const blockSB = blockRaw ? blockRaw.charAt(0) : 'S/B'; 
-            if (!PARQUE_CAJAS[tIdStr]) { PARQUE_CAJAS[tIdStr] = { name: tIdStr, arco: arcoSB, block: blockSB, minX: x, maxX: x, minY: y, maxY: y }; } 
+            if (!PARQUE_CAJAS[tIdStr]) { PARQUE_CAJAS[tIdStr] = { name: tIdStr, arco: arcoSB, block: blockSB, minX: x, maxX: x, minY: y, maxY: y }; logSB++; } 
             else { PARQUE_CAJAS[tIdStr].minX = Math.min(PARQUE_CAJAS[tIdStr].minX, x); PARQUE_CAJAS[tIdStr].maxX = Math.max(PARQUE_CAJAS[tIdStr].maxX, x); PARQUE_CAJAS[tIdStr].minY = Math.min(PARQUE_CAJAS[tIdStr].minY, y); PARQUE_CAJAS[tIdStr].maxY = Math.max(PARQUE_CAJAS[tIdStr].maxY, y); }
             return; 
         }
 
-        const block = flexibleFind(row, 'BLOQUE', 'BLOCK', 'ZONA', 'SECTOR') || 'S/B', filaNum = flexibleFind(row, 'FILA', 'ROW', 'LINEA'), hincaIndex = flexibleFind(row, 'HINCA', 'POSTE', 'HINCA N.', 'Nº HINCA');
+        const block = flexibleFind(row, 'BLOQUE', 'BLOCK', 'ZONA', 'SECTOR', 'MANZANA', 'CUADRO', 'ÁREA', 'AREA') || 'S/B', filaNum = flexibleFind(row, 'FILA', 'ROW', 'LINEA', 'TRAZA', 'TRACK', 'FILA N', 'NRO FILA', 'Nº FILA', 'FILA N.'), hincaIndex = flexibleFind(row, 'HINCA', 'POSTE', 'HINCA N.', 'Nº HINCA', 'N° HINCA', 'NRO HINCA', 'HINCA NRO', 'HINCA N', 'POSTE NRO', 'Nº POSTE');
         if (filaNum === undefined || filaNum === null || hincaIndex === undefined || hincaIndex === null) return;
         const arcoId = detectarArco(tIdStr);
 
-        if(!PARQUE_MASTER[tIdStr]) { PARQUE_MASTER[tIdStr] = { name: tIdStr, arco: arcoId, block: String(block).trim(), minX: x, maxX: x, minY: y, maxY: y, filas: {} }; } 
+        if(!PARQUE_MASTER[tIdStr]) { PARQUE_MASTER[tIdStr] = { name: tIdStr, arco: arcoId, block: String(block).trim(), minX: x, maxX: x, minY: y, maxY: y, filas: {} }; logM++; } 
         else { PARQUE_MASTER[tIdStr].minX = Math.min(PARQUE_MASTER[tIdStr].minX, x); PARQUE_MASTER[tIdStr].maxX = Math.max(PARQUE_MASTER[tIdStr].maxX, x); PARQUE_MASTER[tIdStr].minY = Math.min(PARQUE_MASTER[tIdStr].minY, y); PARQUE_MASTER[tIdStr].maxY = Math.max(PARQUE_MASTER[tIdStr].maxY, y); }
         if(!PARQUE_MASTER[tIdStr].filas[filaNum]) PARQUE_MASTER[tIdStr].filas[filaNum] = { tipo: filaNum == 2 ? "MOTORA" : "GEMELA", hincas: 0 };
         if(hincaIndex > PARQUE_MASTER[tIdStr].filas[filaNum].hincas) PARQUE_MASTER[tIdStr].filas[filaNum].hincas = parseInt(hincaIndex, 10);
     });
+    console.log(`🔍 Arco ${arcoEnEsteArchivo}: ${logZ} zanj, ${logP} punt, ${logM} mast, ${logE} est, ${logSB} cajas`);
     return arcoEnEsteArchivo;
 }
 
