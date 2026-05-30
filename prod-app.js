@@ -141,6 +141,11 @@ async function importarArchivos(input) {
     if (btn) btn.innerText = "⏳ Procesando...";
     let ultimoArcoDetectado = '';
 
+    // Backup por si la importación falla o no reconoce datos
+    const backup = {
+        PARQUE_MASTER, PARQUE_ESTACIONES, PARQUE_CAJAS, PARQUE_ZANJAS, PARQUE_PUNTUALES,
+    };
+
     // Limpiar datos globales para evitar mezclar con datos antiguos de localforage
     PARQUE_MASTER = {};
     PARQUE_ESTACIONES = {};
@@ -173,6 +178,25 @@ async function importarArchivos(input) {
             reader.onerror = () => resolve();
             reader.readAsArrayBuffer(file);
         });
+    }
+
+    // Si no se produjo ningún dato, restaurar backup y no tocar localforage
+    const hasData = Object.keys(PARQUE_MASTER).length > 0 ||
+                    Object.keys(PARQUE_ESTACIONES).length > 0 ||
+                    Object.keys(PARQUE_CAJAS).length > 0 ||
+                    Object.keys(PARQUE_ZANJAS).length > 0 ||
+                    Object.keys(PARQUE_PUNTUALES).length > 0;
+
+    if (!hasData) {
+        PARQUE_MASTER = backup.PARQUE_MASTER;
+        PARQUE_ESTACIONES = backup.PARQUE_ESTACIONES;
+        PARQUE_CAJAS = backup.PARQUE_CAJAS;
+        PARQUE_ZANJAS = backup.PARQUE_ZANJAS;
+        PARQUE_PUNTUALES = backup.PARQUE_PUNTUALES;
+        if (btn) btn.innerText = "❌ No se reconoció el formato";
+        setTimeout(() => { if (btn) btn.innerText = "📂 Cargar Listados"; }, 2000);
+        input.value = '';
+        return;
     }
 
     try {
