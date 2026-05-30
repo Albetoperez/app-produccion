@@ -141,6 +141,13 @@ async function importarArchivos(input) {
     if (btn) btn.innerText = "⏳ Procesando...";
     let ultimoArcoDetectado = '';
 
+    // Limpiar datos globales para evitar mezclar con datos antiguos de localforage
+    PARQUE_MASTER = {};
+    PARQUE_ESTACIONES = {};
+    PARQUE_CAJAS = {};
+    PARQUE_ZANJAS = {};
+    PARQUE_PUNTUALES = {};
+
     const MAX_FILE_SIZE = 20 * 1024 * 1024;
 
     for (let i = 0; i < files.length; i++) {
@@ -169,6 +176,12 @@ async function importarArchivos(input) {
     }
 
     try {
+        // Limpiar localforage antes de guardar datos frescos
+        await localforage.removeItem('PARQUE_MASTER_DATA');
+        await localforage.removeItem('PARQUE_ESTACIONES_DATA');
+        await localforage.removeItem('PARQUE_CAJAS_DATA');
+        await localforage.removeItem('PARQUE_ZANJAS_DATA');
+        await localforage.removeItem('PARQUE_PUNTUALES_DATA');
         await localforage.setItem('PARQUE_MASTER_DATA', PARQUE_MASTER);
         await localforage.setItem('PARQUE_ESTACIONES_DATA', PARQUE_ESTACIONES);
         await localforage.setItem('PARQUE_CAJAS_DATA', PARQUE_CAJAS);
@@ -188,9 +201,13 @@ function detectarArco(id) {
     return match ? `ARC${match[1] || match[2]}` : 'S/A';
 }
 
+function stripAccents(s) {
+    return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
 function flexibleFind(row, ...candidates) {
     const keys = Object.keys(row);
-    const norm = (s) => s.toUpperCase().replace(/[\s\-\_]+/g, '');
+    const norm = (s) => stripAccents(s).toUpperCase().replace(/[\s\-\_]+/g, '');
     for (const name of candidates) {
         if (row[name] !== undefined && row[name] !== null && row[name] !== '') return row[name];
         const nameNorm = norm(name);
@@ -214,7 +231,7 @@ function procesarDatosJSON(data, fileArco) {
 
     data.forEach(rawRow => {
         let row = {};
-        for (let key in rawRow) row[key.trim().toUpperCase()] = rawRow[key];
+        for (let key in rawRow) row[stripAccents(key).trim().toUpperCase()] = rawRow[key];
         
         // 1. ZANJAS (Lector flexible restaurado)
         const xInicio = flexibleFind(row, 'X INICIO', 'X_INICIO', 'X-INICIO', 'X INI', 'XINI', 'XSTART');
@@ -224,7 +241,7 @@ function procesarDatosJSON(data, fileArco) {
         if (xInicio !== undefined && yInicio !== undefined && xFin !== undefined && yFin !== undefined) {
             const x1 = parseCoord(xInicio), y1 = parseCoord(yInicio);
             const x2 = parseCoord(xFin), y2 = parseCoord(yFin);
-            const ref = flexibleFind(row, 'REFERENCIA', 'REFERENCIA (LINEAL)', 'REFERENCIA LINEAL', 'REF', 'TIPO', 'TIPO ZANJA', 'TIPO_ZANJA', 'CAPA', 'DESCRIPCION', 'ZANJA') || 'ZANJA';
+            const ref = flexibleFind(row, 'REFERENCIA', 'REFERENCIA (LINEAL)', 'REFERENCIA LINEAL', 'LINEA', 'LINEA ZANJA', 'REF', 'TIPO', 'TIPO ZANJA', 'TIPO_ZANJA', 'TIPO DE ZANJA', 'CAPA', 'CATEGORIA', 'DESCRIPCION', 'DESCRIPCIÓN', 'ZANJA', 'CODIGO') || 'ZANJA';
             
             if (x1 !== 0 && y1 !== 0 && x2 !== 0 && y2 !== 0) {
                 const safeRef = String(ref).replace(/[\.\-\s]/g, '_'); 
@@ -477,14 +494,13 @@ function initPanEM() {
 }
 
 function normalizeZanjaType(ref) {
-    const r = String(ref).toUpperCase().replace(/[\s\-\_\.]+/g, '');
+    const r = String(ref).toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[\s\-\_\.]+/g, '');
     if (r.includes('ENTRADAPS')) return 'ENTRADA_PS';
-    if (r.includes('MT')) return 'MT';
-    if (r.includes('BT')) return 'BT';
-    if (r.includes('SSAA')) return 'SSAA';
-    if (r.includes('ZANJAG')) return 'PAT';
-    if (r.includes('CCTV')) return 'CCTV';
-    if (r.includes('LEA')) return 'CCTV';
+    if (r.includes('MT') || r.includes('MEDIATENSION')) return 'MT';
+    if (r.includes('BT') || r.includes('BAJATENSION')) return 'BT';
+    if (r.includes('SSAA') || r.includes('SAA') || r.includes('AUXILIAR')) return 'SSAA';
+    if (r.includes('ZANJAG') || r.includes('PAT')) return 'PAT';
+    if (r.includes('CCTV') || r.includes('LEA') || r.includes('FIBRA') || r.includes('COMUNICACION')) return 'CCTV';
     return 'OTRAS';
 }
 
