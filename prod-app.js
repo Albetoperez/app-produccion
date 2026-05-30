@@ -71,6 +71,17 @@ function escapeJsStr(str) {
     return String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"').replace(/</g, '\\x3C').replace(/>/g, '\\x3E').replace(/\n/g, '\\n'); 
 }
 
+const _debouncers = {};
+function debouncedSave(key, data, delay = 2000) {
+    if (!_debouncers[key]) _debouncers[key] = { timer: null };
+    const d = _debouncers[key];
+    if (d.timer) clearTimeout(d.timer);
+    d.timer = setTimeout(async () => {
+        d.timer = null;
+        try { await localforage.setItem(key, data); } catch (e) { console.error("Error guardando", key, e); }
+    }, delay);
+}
+
 function setTask(task, el) {
     currentTask = task;
     document.querySelectorAll('.tool').forEach(t => t.classList.remove('active'));
@@ -328,7 +339,7 @@ async function renderMatrix() {
         const canvasWidth = (rX * SCALE_X) + (MARGIN_LEFT * 2);
         const canvasHeight = (rY * SCALE_Y) + (MARGIN_TOP_BOTTOM * 2) + 300; 
         
-        let html = `<div class="map-canvas" style="position: relative; min-width: ${canvasWidth}px; min-height: ${canvasHeight}px;">`;
+        let parts = [`<div class="map-canvas" style="position: relative; min-width: ${canvasWidth}px; min-height: ${canvasHeight}px;">`];
         
         for (let id of psIds) {
             const ps = PARQUE_ESTACIONES[id];
@@ -337,7 +348,7 @@ async function renderMatrix() {
             let wS = ((ps.maxX - ps.minX) * SCALE_X); let pxH = ((ps.maxY - ps.minY) * SCALE_Y);
             if (wS < 60) wS = 60; if (pxH < 40) pxH = 40; 
             const letra = ps.name.split('-').pop(); const safeName = escapeHtml(`PS-${letra}`); 
-            html += `<div class="power-station" style="position: absolute; left: ${pxX}px; top: ${pxY}px; width: ${wS}px; height: ${pxH}px;" title="${escapeHtml(ps.name)}"><span style="font-size: 16px; margin-bottom: 2px;">⚡</span><span>${safeName}</span></div>`;
+            parts.push(`<div class="power-station" style="position: absolute; left: ${pxX}px; top: ${pxY}px; width: ${wS}px; height: ${pxH}px;" title="${escapeHtml(ps.name)}"><span style="font-size: 16px; margin-bottom: 2px;">⚡</span><span>${safeName}</span></div>`);
         }
 
         for (let id of sbIds) {
@@ -349,7 +360,7 @@ async function renderMatrix() {
             let colorClass = 'sb-red'; if(count === 6) colorClass = 'sb-green'; else if(count > 0) colorClass = 'sb-orange';
             const numCaja = sb.name.split('-').slice(2).join('-').split('_')[0];
             const safeId = escapeJsStr(id);
-            html += `<div id="sb-${safeId}" class="string-box ${colorClass}" style="position: absolute; left: ${pxX}px; top: ${pxY}px; width: ${wS}px; height: ${pxH}px;" title="Ver Checklist" onclick="abrirModalCaja('${safeId}')"><span>${escapeHtml(numCaja)}</span></div>`;
+            parts.push(`<div id="sb-${safeId}" class="string-box ${colorClass}" style="position: absolute; left: ${pxX}px; top: ${pxY}px; width: ${wS}px; height: ${pxH}px;" title="Ver Checklist" onclick="abrirModalCaja('${safeId}')"><span>${escapeHtml(numCaja)}</span></div>`);
         }
 
         for (let id of ids) {
@@ -361,26 +372,27 @@ async function renderMatrix() {
             const esM = filas.length === 1;
             let wS = !esM ? `width: ${((tr.maxX - tr.minX) * SCALE_X) + 22}px; justify-content: space-between;` : `justify-content: center;`;
             
-            html += `<div class="prod-card map-card" style="position: absolute; left: ${pxX}px; top: ${pxY}px; height: ${pxH}px; ${wS}">`;
+            parts.push(`<div class="prod-card map-card" style="position: absolute; left: ${pxX}px; top: ${pxY}px; height: ${pxH}px; ${wS}">`);
             const safeId = escapeJsStr(id);
             const safeName = escapeHtml(tr.name.split('-').slice(-2).join('-'));
-            html += `<div class="tracker-title" style="cursor:pointer;" onclick="paintTracker('${safeId}')" title="Pintar tracker completo">${safeName}</div>`;
+            parts.push(`<div class="tracker-title" style="cursor:pointer;" onclick="paintTracker('${safeId}')" title="Pintar tracker completo">${safeName}</div>`);
             for (let fN of filas) {
                 const f = tr.filas[fN];
                 let tT = fN == 2 ? 'MOT' : 'GEM'; let cT = fN == 2 ? 'motora' : 'gemela'; if (esM) { tT = 'MONO'; cT = 'mono'; }
-                html += `<div class="row-container"><div class="row-tag ${cT}" style="cursor:pointer;" onclick="paintRow('${safeId}', '${fN}')" title="Pintar fila completa">${tT}</div><div class="cells-grid">`;
+                parts.push(`<div class="row-container"><div class="row-tag ${cT}" style="cursor:pointer;" onclick="paintRow('${safeId}', '${fN}')" title="Pintar fila completa">${tT}</div><div class="cells-grid">`);
                 for (let h = 1; h <= f.hincas; h++) {
                     const hId = `${id}-F${fN}-H${h}`;
                     const safeHId = escapeJsStr(hId);
                     const rawData = HISTORIAL_PROD[hId];
                     const s = (rawData && typeof rawData === 'object') ? (rawData.estado || '') : (rawData || '');
-                    html += `<div class="cell" id="${safeHId}" onclick="paint('${safeHId}')" style="background-color:${getStyleByStatus(s)}; color: ${s==='' ? 'transparent' : '#333'};">${s}</div>`;
+                    parts.push(`<div class="cell" id="${safeHId}" onclick="paint('${safeHId}')" style="background-color:${getStyleByStatus(s)}; color: ${s==='' ? 'transparent' : '#333'};">${s}</div>`);
                 }
-                html += `</div></div>`;
+                parts.push(`</div></div>`);
             }
-            html += `</div>`;
+            parts.push(`</div>`);
         }
-        container.innerHTML = html + '</div>';
+        parts.push('</div>');
+        container.innerHTML = parts.join('');
         
         const bName = document.getElementById('summary-block-name');
         if (bName) bName.innerText = `Arco ${arco.replace('ARC','')} - Bloque ${block}`;
@@ -395,6 +407,9 @@ async function renderMatrix() {
 function initPanEM() {
     const container = document.getElementById('matrix-container');
     if (!container) return;
+
+    if (container.dataset.panEmInit === '1') return;
+    container.dataset.panEmInit = '1';
 
     let isDragging = false;
     let startX, startY, sLeft, sTop;
@@ -534,12 +549,11 @@ function renderMatrixZanjas() {
             if (pzPointY < 0) pzPointY = 50;
         }
         
-        let html = `<div id="zanjas-viewport" style="width: 100%; height: 70vh; min-height: 500px; overflow: hidden; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; position: relative; margin-top: 10px; cursor: grab;">`;
-        html += `<div id="pan-zoom-layer" style="position: absolute; width: ${canvasWidth}px; height: ${canvasHeight}px; transform: translate(${pzPointX}px, ${pzPointY}px) scale(${pzScale}); transform-origin: 0 0;">`;
+        let parts = [`<div id="zanjas-viewport" style="width: 100%; height: 70vh; min-height: 500px; overflow: hidden; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; position: relative; margin-top: 10px; cursor: grab;">`];
+        parts.push(`<div id="pan-zoom-layer" style="position: absolute; width: ${canvasWidth}px; height: ${canvasHeight}px; transform: translate(${pzPointX}px, ${pzPointY}px) scale(${pzScale}); transform-origin: 0 0;">`);
         
-        let svgHtml = `<svg style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:10;">`;
+        let svgParts = [`<svg style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:10;">`];
         
-        let zanjaMetrosTotal = 0;
         let metrosPorTipo = { 'MT': 0, 'BT': 0, 'SSAA': 0, 'PAT': 0, 'CCTV': 0, 'ENTRADA_PS': 0 };
         
         zValues.forEach(z => {
@@ -550,8 +564,6 @@ function renderMatrixZanjas() {
             metrosPorTipo[type] = (metrosPorTipo[type] || 0) + longitud;
             if (!zaLayerState.zanja[type]) return;
             
-            zanjaMetrosTotal += longitud;
-
             const pxX1 = ((z.x1 - gMinX) * baseScaleX) + MARGIN; const pxY1 = ((gMaxY - z.y1) * baseScaleY) + MARGIN;
             const pxX2 = ((z.x2 - gMinX) * baseScaleX) + MARGIN; const pxY2 = ((gMaxY - z.y2) * baseScaleY) + MARGIN;
             const strokeColor = getZanjaColorByType(type);
@@ -559,7 +571,7 @@ function renderMatrixZanjas() {
             const grosorFinal = 4 / pzScale;
             const zAlertMsg = escapeJsStr(`Zanja detectada:\nTipo: ${type}\nRef: ${z.ref}`);
             
-            svgHtml += `<line x1="${pxX1}" y1="${pxY1}" x2="${pxX2}" y2="${pxY2}" stroke="${strokeColor}" stroke-width="${grosorFinal}" stroke-linecap="round" style="pointer-events:auto; cursor:pointer;" onclick="alert('${zAlertMsg}')"></line>`;
+            svgParts.push(`<line x1="${pxX1}" y1="${pxY1}" x2="${pxX2}" y2="${pxY2}" stroke="${strokeColor}" stroke-width="${grosorFinal}" stroke-linecap="round" style="pointer-events:auto; cursor:pointer;" onclick="alert('${zAlertMsg}')"></line>`);
 
             if (type !== 'ENTRADA_PS') {
                 const pLen = Math.sqrt(Math.pow(pxX2 - pxX1, 2) + Math.pow(pxY2 - pxY1, 2));
@@ -572,7 +584,7 @@ function renderMatrixZanjas() {
                         let f = i / (numTexts + 1);
                         let cx = pxX1 + (pxX2 - pxX1) * f;
                         let cy = pxY1 + (pxY2 - pxY1) * f;
-                        svgHtml += `<text class="za-cut-text" x="${cx}" y="${cy}" fill="${strokeColor}" font-size="${10 / pzScale}" font-weight="900" font-family="sans-serif" text-anchor="middle" dominant-baseline="central" transform="rotate(${angle}, ${cx}, ${cy})" style="pointer-events:none;" paint-order="stroke" stroke="#f8fafc" stroke-width="${5 / pzScale}">${type}</text>`;
+                        svgParts.push(`<text class="za-cut-text" x="${cx}" y="${cy}" fill="${strokeColor}" font-size="${10 / pzScale}" font-weight="900" font-family="sans-serif" text-anchor="middle" dominant-baseline="central" transform="rotate(${angle}, ${cx}, ${cy})" style="pointer-events:none;" paint-order="stroke" stroke="#f8fafc" stroke-width="${5 / pzScale}">${type}</text>`);
                     }
                 }
             }
@@ -598,7 +610,7 @@ function renderMatrixZanjas() {
                 let count = contarChecksPuntual(checks, 'arqueta');
                 let fillCol = getColorPuntual(count, 6);
 
-                svgHtml += `<rect id="pt-${pIdSafe}" x="${pxX - s/2}" y="${pxY - s/2}" width="${s}" height="${s}" fill="${fillCol}" stroke="${c}" stroke-width="${sw}" style="pointer-events:auto; cursor:pointer;" onclick="abrirModalPuntual('${pIdSafe}', 'arqueta', '${escapeJsStr(p.ref)}')"></rect>`;
+                svgParts.push(`<rect id="pt-${pIdSafe}" x="${pxX - s/2}" y="${pxY - s/2}" width="${s}" height="${s}" fill="${fillCol}" stroke="${c}" stroke-width="${sw}" style="pointer-events:auto; cursor:pointer;" onclick="abrirModalPuntual('${pIdSafe}', 'arqueta', '${escapeJsStr(p.ref)}')"></rect>`);
             } 
             else if (refUp.includes('POSTE CAJA')) {
                 countsPT.csb++;
@@ -611,9 +623,9 @@ function renderMatrixZanjas() {
                 const s2 = s/2;
                 const triPath = `M ${pxX},${pxY - s2} L ${pxX + s2},${pxY + s2} L ${pxX - s2},${pxY + s2} Z`;
                 
-                svgHtml += `<path id="pt-${pIdSafe}" d="${triPath}" fill="${fillCol}" stroke="${c}" stroke-width="${sw}" style="pointer-events:auto; cursor:pointer;" onclick="abrirModalPuntual('${pIdSafe}', 'box', '${escapeJsStr(p.ref)}')"/>`;
-                svgHtml += `<circle cx="${pxX}" cy="${pxY + 2.5}" r="1.5" fill="${c}" style="pointer-events:none;"></circle>`; 
-                svgHtml += `<text x="${pxX}" y="${pxY - s2 - 4}" fill="${c}" font-size="9" font-weight="bold" text-anchor="middle" font-family="sans-serif" style="pointer-events:none;">CSB</text>`;
+                svgParts.push(`<path id="pt-${pIdSafe}" d="${triPath}" fill="${fillCol}" stroke="${c}" stroke-width="${sw}" style="pointer-events:auto; cursor:pointer;" onclick="abrirModalPuntual('${pIdSafe}', 'box', '${escapeJsStr(p.ref)}')"/>`);
+                svgParts.push(`<circle cx="${pxX}" cy="${pxY + 2.5}" r="1.5" fill="${c}" style="pointer-events:none;"></circle>`);
+                svgParts.push(`<text x="${pxX}" y="${pxY - s2 - 4}" fill="${c}" font-size="9" font-weight="bold" text-anchor="middle" font-family="sans-serif" style="pointer-events:none;">CSB</text>`);
             }
             else if (refUp.includes('BÁCULO-CCTV') || refUp.includes('BACULO-CCTV') || refUp.includes('CCTV') || refUp.includes('FC-')) {
                 if (!zaLayerState.puntual.cctv) return;
@@ -631,9 +643,9 @@ function renderMatrixZanjas() {
                 const o = r * 0.7071; 
                 let safeRef = refUp.includes('FC-') ? 'CCTV / FC' : escapeJsStr(p.ref);
                 
-                svgHtml += `<circle id="pt-${pIdSafe}" cx="${pxX}" cy="${pxY}" r="${r}" fill="${fillCol}" stroke="${c}" stroke-width="${sw}" style="pointer-events:auto; cursor:pointer;" onclick="abrirModalPuntual('${pIdSafe}', 'baculo', '${safeRef}')"></circle>`;
-                svgHtml += `<line x1="${pxX - o}" y1="${pxY - o}" x2="${pxX + o}" y2="${pxY + o}" stroke="${c}" stroke-width="${sw}" style="pointer-events:none;"></line>`;
-                svgHtml += `<line x1="${pxX - o}" y1="${pxY + o}" x2="${pxX + o}" y2="${pxY - o}" stroke="${c}" stroke-width="${sw}" style="pointer-events:none;"></line>`;
+                svgParts.push(`<circle id="pt-${pIdSafe}" cx="${pxX}" cy="${pxY}" r="${r}" fill="${fillCol}" stroke="${c}" stroke-width="${sw}" style="pointer-events:auto; cursor:pointer;" onclick="abrirModalPuntual('${pIdSafe}', 'baculo', '${safeRef}')"></circle>`);
+                svgParts.push(`<line x1="${pxX - o}" y1="${pxY - o}" x2="${pxX + o}" y2="${pxY + o}" stroke="${c}" stroke-width="${sw}" style="pointer-events:none;"></line>`);
+                svgParts.push(`<line x1="${pxX - o}" y1="${pxY + o}" x2="${pxX + o}" y2="${pxY - o}" stroke="${c}" stroke-width="${sw}" style="pointer-events:none;"></line>`);
             }
             else if (refUp.includes('GATEWAY') || refUp.includes('MBOX') || refUp.includes('TBOX') || refUp.includes('METEO')) {
                 let shortName = 'PVH';
@@ -654,21 +666,21 @@ function renderMatrixZanjas() {
                 const s2 = s/2;
                 const triPath = `M ${pxX},${pxY - s2} L ${pxX + s2},${pxY + s2} L ${pxX - s2},${pxY + s2} Z`;
 
-                svgHtml += `<path id="pt-${pIdSafe}" d="${triPath}" fill="${fillCol}" stroke="${c}" stroke-width="${sw}" style="pointer-events:auto; cursor:pointer;" onclick="abrirModalPuntual('${pIdSafe}', '${pType}', '${escapeJsStr(shortName)}')"/>`;
-                svgHtml += `<circle cx="${pxX}" cy="${pxY + 2.5}" r="1.5" fill="${c}" style="pointer-events:none;"></circle>`; 
-                svgHtml += `<text x="${pxX}" y="${pxY - s2 - 4}" fill="${c}" font-size="9" font-weight="bold" text-anchor="middle" font-family="sans-serif" style="pointer-events:none;">${escapeHtml(shortName)}</text>`; 
+                svgParts.push(`<path id="pt-${pIdSafe}" d="${triPath}" fill="${fillCol}" stroke="${c}" stroke-width="${sw}" style="pointer-events:auto; cursor:pointer;" onclick="abrirModalPuntual('${pIdSafe}', '${pType}', '${escapeJsStr(shortName)}')"/>`);
+                svgParts.push(`<circle cx="${pxX}" cy="${pxY + 2.5}" r="1.5" fill="${c}" style="pointer-events:none;"></circle>`);
+                svgParts.push(`<text x="${pxX}" y="${pxY - s2 - 4}" fill="${c}" font-size="9" font-weight="bold" text-anchor="middle" font-family="sans-serif" style="pointer-events:none;">${escapeHtml(shortName)}</text>`);
             }
         });
 
-        svgHtml += `</svg>`;
-        html += svgHtml;
+        svgParts.push(`</svg>`);
+        parts.push(svgParts.join(''));
 
         for (let id of sbIds) {
             const sb = PARQUE_CAJAS[id];
             const pxX = (((sb.minX + sb.maxX) / 2 - gMinX) * baseScaleX) + MARGIN; 
             const pxY = ((gMaxY - sb.maxY) * baseScaleY) + MARGIN;
             const numCaja = sb.name.split('-').slice(2).join('-').split('_')[0];
-            html += `<div style="position: absolute; left: ${pxX}px; top: ${pxY}px; width: 24px; height: 14px; background: rgba(226, 232, 240, 0.7); border: 1px solid #cbd5e1; border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 8px; color: #94a3b8; font-weight: bold; pointer-events: none; z-index: 1;">${escapeHtml(numCaja)}</div>`;
+            parts.push(`<div style="position: absolute; left: ${pxX}px; top: ${pxY}px; width: 24px; height: 14px; background: rgba(226, 232, 240, 0.7); border: 1px solid #cbd5e1; border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 8px; color: #94a3b8; font-weight: bold; pointer-events: none; z-index: 1;">${escapeHtml(numCaja)}</div>`);
         }
 
         for (let id of ids) {
@@ -677,11 +689,11 @@ function renderMatrixZanjas() {
             let pxH = ((tr.maxY - tr.minY) * baseScaleY); if (pxH < 40) pxH = 40; 
             const safeName = escapeHtml(tr.name.split('-').slice(-2).join('-'));
             let wS_ZA = ((tr.maxX - tr.minX) * baseScaleX) || 15;
-            html += `<div style="position: absolute; left: ${pxX}px; top: ${pxY}px; width: ${wS_ZA}px; height: ${pxH}px; background: rgba(226, 232, 240, 0.7); border: 1px solid #cbd5e1; border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 8px; color: #94a3b8; font-weight: bold; pointer-events: none; z-index: 2;">${safeName}</div>`;
+            parts.push(`<div style="position: absolute; left: ${pxX}px; top: ${pxY}px; width: ${wS_ZA}px; height: ${pxH}px; background: rgba(226, 232, 240, 0.7); border: 1px solid #cbd5e1; border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 8px; color: #94a3b8; font-weight: bold; pointer-events: none; z-index: 2;">${safeName}</div>`);
         }
         
-        html += `</div></div>`;
-        container.innerHTML = html;
+        parts.push(`</div></div>`);
+        container.innerHTML = parts.join('');
         
         const arcoNameZA = document.getElementById('summary-arco-name-za');
         if (arcoNameZA) arcoNameZA.innerText = `Arco ${arco.replace('ARC','')}`;
@@ -804,15 +816,6 @@ function initPanZoomZanjas() {
         pzPointX = mouseX - xs * pzScale;
         pzPointY = mouseY - ys * pzScale;
         layer.style.transform = `translate(${pzPointX}px, ${pzPointY}px) scale(${pzScale})`;
-        
-        document.querySelectorAll('#zanjas-viewport line').forEach(line => { 
-            line.setAttribute('stroke-width', 4 / pzScale); 
-        });
-        
-        document.querySelectorAll('#zanjas-viewport text.za-cut-text').forEach(txt => { 
-            txt.setAttribute('font-size', 10 / pzScale); 
-            txt.setAttribute('stroke-width', 5 / pzScale); 
-        });
     }, { passive: false });
 }
 
@@ -858,7 +861,7 @@ async function toggleCheckCaja(id, item, isChecked) {
     } else {
         delete HISTORIAL_CAJAS[id][item];
     }
-    try { await localforage.setItem('HISTORIAL_CAJAS', HISTORIAL_CAJAS); } catch (e) { console.error("Error al guardar historial de cajas:", e); }
+    debouncedSave('HISTORIAL_CAJAS', HISTORIAL_CAJAS);
 }
 
 function contarChecks(checks) {
@@ -905,7 +908,7 @@ async function toggleCheckPuntual(id, item, isChecked) {
     const hoy = getFechaProduccion();
     if (isChecked) { HISTORIAL_PUNTUALES[id][item] = hoy; } 
     else { delete HISTORIAL_PUNTUALES[id][item]; }
-    try { await localforage.setItem('HISTORIAL_PUNTUALES', HISTORIAL_PUNTUALES); } catch (e) { console.error("Error al guardar historial puntuales:", e); }
+    debouncedSave('HISTORIAL_PUNTUALES', HISTORIAL_PUNTUALES);
 }
 
 const STATUS_COLORS = { 'H': '#ffeb3b', 'P': '#2196f3', 'T': '#9c27b0', 'O': '#00bcd4', 'M': '#4caf50', '': '#fff' };
@@ -1001,7 +1004,7 @@ async function paint(id) {
 
     applyToCell(id, newTask, newLvlIdx, hoy);
 
-    try { await localforage.setItem('HISTORIAL_PROD', HISTORIAL_PROD); } catch (e) { console.error("Error al guardar historial:", e); }
+    debouncedSave('HISTORIAL_PROD', HISTORIAL_PROD);
     actualizarContadores();
 }
 
@@ -1030,7 +1033,7 @@ async function paintRow(trackerId, filaNum) {
         applyToCell(`${trackerId}-F${filaNum}-H${h}`, newTask, newLvlIdx, hoy);
     }
 
-    try { await localforage.setItem('HISTORIAL_PROD', HISTORIAL_PROD); } catch (e) { console.error("Error al guardar historial:", e); }
+    debouncedSave('HISTORIAL_PROD', HISTORIAL_PROD);
     actualizarContadores();
 }
 
@@ -1063,7 +1066,7 @@ async function paintTracker(trackerId) {
         }
     }
 
-    try { await localforage.setItem('HISTORIAL_PROD', HISTORIAL_PROD); } catch (e) { console.error("Error al guardar historial:", e); }
+    debouncedSave('HISTORIAL_PROD', HISTORIAL_PROD);
     actualizarContadores();
 }
 
