@@ -164,6 +164,7 @@ async function importarArchivos(input) {
 
     const MAX_FILE_SIZE = 20 * 1024 * 1024;
 
+    let totalRows = 0;
     for (let i = 0; i < files.length; i++) {
         const file = files[i];
         if (file.size > MAX_FILE_SIZE) { alert(`⚠️ Archivo demasiado grande.`); continue; }
@@ -179,9 +180,10 @@ async function importarArchivos(input) {
                     const workbook = XLSX.read(data, { type: 'array' });
                     let todaLaData = [];
                     workbook.SheetNames.forEach(sheetName => { todaLaData = todaLaData.concat(XLSX.utils.sheet_to_json(workbook.Sheets[sheetName])); });
+                    totalRows += todaLaData.length;
                     const detectado = procesarDatosJSON(todaLaData, fileArco);
                     if (detectado) ultimoArcoDetectado = detectado;
-                } catch (error) { console.error("Error leyendo Excel:", error); } 
+                } catch (error) { console.error("Error leyendo Excel:", error); alert(`Error al procesar "${file.name}": ${error.message}`); } 
                 finally { resolve(); }
             };
             reader.onerror = () => resolve();
@@ -195,8 +197,14 @@ async function importarArchivos(input) {
         await localforage.setItem('PARQUE_CAJAS_DATA', PARQUE_CAJAS);
         await localforage.setItem('PARQUE_ZANJAS_DATA', PARQUE_ZANJAS);
         await localforage.setItem('PARQUE_PUNTUALES_DATA', PARQUE_PUNTUALES);
-    } catch (e) { console.error("Error IndexedDB:", e); }
+    } catch (e) { console.error("Error IndexedDB:", e); alert("Error al guardar en IndexedDB. Puede que el navegador no permita almacenamiento."); }
     
+    const trackersCount = Object.keys(PARQUE_MASTER).length;
+    const zanjasCount = Object.keys(PARQUE_ZANJAS).length;
+    const puntualesCount = Object.keys(PARQUE_PUNTUALES).length;
+    if (totalRows > 0 && trackersCount === 0 && zanjasCount === 0 && puntualesCount === 0) {
+        alert("No se pudo extraer ningún dato. Revisa que el Excel tenga las columnas esperadas:\n- CODIGO o REFERENCIA, X, Y, FILA, HINCA (para trackers)\n- X INICIO, Y INICIO, X FIN, Y FIN (para zanjas)");
+    }
     if (btn) { btn.innerText = `✅ ¡Cargado!`; setTimeout(() => btn.innerText = "📂 Cargar Listados", 2000); }
     input.value = '';
     actualizarSelectores(ultimoArcoDetectado);
@@ -215,7 +223,11 @@ function procesarDatosJSON(data, fileArco) {
     
     if (!arcoEnEsteArchivo) {
         for (let i = 0; i < data.length; i++) {
-            let val = String(data[i]['CODIGO'] || data[i]['REFERENCIA'] || data[i]['TIPO'] || data[i]['CAPA'] || '').toUpperCase();
+            const rawRow = data[i];
+            const keys = Object.keys(rawRow);
+            const codigoKey = keys.find(k => k.trim().replace(/[_-]/g, ' ').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase() === 'CODIGO');
+            const refKey = keys.find(k => k.trim().replace(/[_-]/g, ' ').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase() === 'REFERENCIA');
+            let val = String(rawRow[codigoKey] || rawRow[refKey] || rawRow['TIPO'] || rawRow['CAPA'] || '').toUpperCase();
             let m = val.match(/ARCO\s*(\d+)|ARC\s*(\d+)/);
             if (m) { arcoEnEsteArchivo = `ARC${m[1] || m[2]}`; break; }
         }
@@ -224,7 +236,7 @@ function procesarDatosJSON(data, fileArco) {
 
     data.forEach(rawRow => {
         let row = {};
-        for (let key in rawRow) row[key.trim().toUpperCase()] = rawRow[key];
+        for (let key in rawRow) row[key.trim().replace(/[_-]/g, ' ').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase()] = rawRow[key];
         
         if (row['X INICIO'] !== undefined && row['Y INICIO'] !== undefined && row['X FIN'] !== undefined && row['Y FIN'] !== undefined) {
             const x1 = parseCoord(row['X INICIO']), y1 = parseCoord(row['Y INICIO']);
@@ -275,21 +287,23 @@ function procesarDatosJSON(data, fileArco) {
         if (tIdStr.includes('-SB-')) {
             const match = tIdStr.match(/ARCO\s*(\d+)|ARC\s*(\d+)/);
             const arcoSB = match ? `ARC${match[1] || match[2]}` : 'S/A';
-            const blockRaw = tIdStr.split('-')[2]; 
-            const blockSB = blockRaw ? blockRaw.charAt(0) : 'S/B'; 
+            const blockRaw = (tIdStr.split('-')[2] || '').trim();
+            const blockSB = blockRaw || 'S/B'; 
             if (!PARQUE_CAJAS[tIdStr]) { PARQUE_CAJAS[tIdStr] = { name: tIdStr, arco: arcoSB, block: blockSB, minX: x, maxX: x, minY: y, maxY: y }; } 
             else { PARQUE_CAJAS[tIdStr].minX = Math.min(PARQUE_CAJAS[tIdStr].minX, x); PARQUE_CAJAS[tIdStr].maxX = Math.max(PARQUE_CAJAS[tIdStr].maxX, x); PARQUE_CAJAS[tIdStr].minY = Math.min(PARQUE_CAJAS[tIdStr].minY, y); PARQUE_CAJAS[tIdStr].maxY = Math.max(PARQUE_CAJAS[tIdStr].maxY, y); }
             return; 
         }
 
-        const block = row['BLOQUE'] || 'S/B', filaNum = row['FILA'], hincaIndex = row['HINCA'];
-        if (filaNum === undefined || filaNum === null || hincaIndex === undefined || hincaIndex === null) return;
+        const block = row['BLOQUE'] || 'S/B', filaNum = row['FILA'], hincaRaw = row['HINCA'];
+        if (filaNum === undefined || filaNum === null || hincaRaw === undefined || hincaRaw === null) return;
+        const hincaIndex = parseInt(String(hincaRaw).replace(/^[^\d]*/, ''), 10);
+        if (isNaN(hincaIndex) || hincaIndex <= 0) return;
         const arcoId = detectarArco(tIdStr);
 
         if(!PARQUE_MASTER[tIdStr]) { PARQUE_MASTER[tIdStr] = { name: tIdStr, arco: arcoId, block: String(block).trim(), minX: x, maxX: x, minY: y, maxY: y, filas: {} }; } 
         else { PARQUE_MASTER[tIdStr].minX = Math.min(PARQUE_MASTER[tIdStr].minX, x); PARQUE_MASTER[tIdStr].maxX = Math.max(PARQUE_MASTER[tIdStr].maxX, x); PARQUE_MASTER[tIdStr].minY = Math.min(PARQUE_MASTER[tIdStr].minY, y); PARQUE_MASTER[tIdStr].maxY = Math.max(PARQUE_MASTER[tIdStr].maxY, y); }
         if(!PARQUE_MASTER[tIdStr].filas[filaNum]) PARQUE_MASTER[tIdStr].filas[filaNum] = { tipo: filaNum == 2 ? "MOTORA" : "GEMELA", hincas: 0 };
-        if(hincaIndex > PARQUE_MASTER[tIdStr].filas[filaNum].hincas) PARQUE_MASTER[tIdStr].filas[filaNum].hincas = parseInt(hincaIndex, 10);
+        if(hincaIndex > PARQUE_MASTER[tIdStr].filas[filaNum].hincas) PARQUE_MASTER[tIdStr].filas[filaNum].hincas = hincaIndex;
     });
     return arcoEnEsteArchivo;
 }
@@ -297,6 +311,10 @@ function procesarDatosJSON(data, fileArco) {
 function actualizarSelectores(arcoPreferido) {
     let arcos = new Set();
     Object.values(PARQUE_MASTER).forEach(tr => { if(tr.arco) arcos.add(tr.arco); });
+    Object.values(PARQUE_ZANJAS).forEach(z => { if(z.arco) arcos.add(z.arco); });
+    Object.values(PARQUE_PUNTUALES).forEach(p => { if(p.arco) arcos.add(p.arco); });
+    Object.values(PARQUE_ESTACIONES).forEach(ps => { if(ps.arco) arcos.add(ps.arco); });
+    Object.values(PARQUE_CAJAS).forEach(sb => { if(sb.arco) arcos.add(sb.arco); });
     const selectArco = document.getElementById('select-arco');
     const valorAntes = selectArco.value;
     if (arcos.size === 0) {
@@ -314,6 +332,8 @@ function actualizarBloques() {
     const arcoSeleccionado = document.getElementById('select-arco').value;
     let bloques = new Set();
     Object.values(PARQUE_MASTER).forEach(tr => { if(tr.arco === arcoSeleccionado && tr.block) bloques.add(tr.block); });
+    Object.values(PARQUE_ESTACIONES).forEach(ps => { if(ps.arco === arcoSeleccionado && ps.block) bloques.add(ps.block); });
+    Object.values(PARQUE_CAJAS).forEach(sb => { if(sb.arco === arcoSeleccionado && sb.block) bloques.add(sb.block); });
     document.getElementById('select-block').innerHTML = Array.from(bloques).sort().map(b => `<option value="${b}">BLOQUE ${b}</option>`).join('');
     
     pzScale = 1; pzPointX = 0; pzPointY = 0;
@@ -674,13 +694,14 @@ function renderMatrixZanjas() {
             else if (refUp.includes('GATEWAY') || refUp.includes('MBOX') || refUp.includes('TBOX') || refUp.includes('METEO')) {
                 let shortName = 'PVH';
                 let pType = null;
-                if (refUp.includes('MBOX+GATEWAY')) { shortName = 'MBOX+GW'; pType = 'box'; countsPT.mbox++; }
-                else if (refUp.includes('GATEWAY')) { shortName = 'GATEWAY'; pType = 'box'; countsPT.gateway++; }
-                else if (refUp.includes('MBOX')) { shortName = 'MBOX'; pType = 'box'; countsPT.mbox++; }
-                else if (refUp.includes('TBOX')) { shortName = 'TBOX'; pType = 'box'; countsPT.tbox++; }
-                else if (refUp.includes('METEO')) { shortName = 'METEO'; pType = 'meteo'; countsPT.meteo++; }
+                let layerKey = null;
+                if (refUp.includes('MBOX+GATEWAY')) { shortName = 'MBOX+GW'; pType = 'box'; layerKey = 'mbox'; countsPT.mbox++; }
+                else if (refUp.includes('GATEWAY')) { shortName = 'GATEWAY'; pType = 'box'; layerKey = 'gateway'; countsPT.gateway++; }
+                else if (refUp.includes('MBOX')) { shortName = 'MBOX'; pType = 'box'; layerKey = 'mbox'; countsPT.mbox++; }
+                else if (refUp.includes('TBOX')) { shortName = 'TBOX'; pType = 'box'; layerKey = 'tbox'; countsPT.tbox++; }
+                else if (refUp.includes('METEO')) { shortName = 'METEO'; pType = 'meteo'; layerKey = 'meteo'; countsPT.meteo++; }
                 
-                if (pType && !zaLayerState.puntual[pType === 'meteo' ? 'meteo' : 'mbox']) return;
+                if (layerKey && !zaLayerState.puntual[layerKey]) return;
 
                 let maxC = pType === 'meteo' ? 6 : 7;
                 let count = contarChecksPuntual(checks, pType);
