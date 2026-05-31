@@ -7,14 +7,17 @@ let PARQUE_PUNTUALES = {};
 let HISTORIAL_ZANJAS = {};
 let HISTORIAL_PUNTUALES = {};
 
-const LEVELS = ['H', 'P', 'T', 'O', 'M'];
+// LEVELS now defined in shared.js
 
 let chartS = null;
 let chartDiario = null;
 let chartSCB = null;
 let chartDiarioSCB = null;
 
-localforage.config({ name: 'SIGMA_PROD_V1', storeName: 'produccion_hincas' });
+localforage.config({ name: 'SIGMA_PROD_V1', storeName: 'produccion_hincas' }).catch(() => {
+    console.warn('IndexedDB no disponible, usando localStorage como fallback');
+    localforage.setDriver(localforage.LOCALSTORAGE);
+});
 
 window.onload = async () => {
     try {
