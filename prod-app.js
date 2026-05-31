@@ -7,7 +7,8 @@ let PARQUE_ESTACIONES = {};
 let PARQUE_CAJAS = {}; 
 let HISTORIAL_CAJAS = {};
 let PARQUE_ZANJAS = {}; 
-let PARQUE_PUNTUALES = {}; 
+let PARQUE_PUNTUALES = {};
+let HISTORIAL_ZANJAS = {}; 
 let HISTORIAL_PUNTUALES = {}; 
 let _currentCajaId = null;
 let _currentPuntual = null; 
@@ -18,7 +19,7 @@ let pzPointY = 0;
 
 let zaPanelCollapsed = false;
 let zaLayerState = {
-        zanja: { 'MT': true, 'BT': true, 'SSAA': true, 'PAT': true, 'CCTV': true, 'ENTRADA_PS': true, 'OTRAS': true },
+    zanja: { 'MT': true, 'BT': true, 'SSAA': true, 'PAT': true, 'CCTV': true, 'ENTRADA_PS': true, 'OTRAS': true },
     puntual: { 'arqueta': true, 'gateway': true, 'mbox': true, 'tbox': true, 'meteo': true, 'csb': true, 'cctv': true } 
 };
 
@@ -71,17 +72,6 @@ function escapeJsStr(str) {
     return String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"').replace(/</g, '\\x3C').replace(/>/g, '\\x3E').replace(/\n/g, '\\n'); 
 }
 
-const _debouncers = {};
-function debouncedSave(key, data, delay = 2000) {
-    if (!_debouncers[key]) _debouncers[key] = { timer: null };
-    const d = _debouncers[key];
-    if (d.timer) clearTimeout(d.timer);
-    d.timer = setTimeout(async () => {
-        d.timer = null;
-        try { await localforage.setItem(key, data); } catch (e) { console.error("Error guardando", key, e); }
-    }, delay);
-}
-
 function setTask(task, el) {
     currentTask = task;
     document.querySelectorAll('.tool').forEach(t => t.classList.remove('active'));
@@ -90,27 +80,38 @@ function setTask(task, el) {
 
 function setAppMode(mode) {
     currentAppMode = mode;
-    document.getElementById('btn-mode-em').classList.toggle('active', mode === 'EM');
-    document.getElementById('btn-mode-za').classList.toggle('active', mode === 'ZA');
+    
+    if(document.getElementById('btn-mode-em')) document.getElementById('btn-mode-em').classList.toggle('active', mode === 'EM');
+    if(document.getElementById('btn-mode-za')) document.getElementById('btn-mode-za').classList.toggle('active', mode === 'ZA');
+    if(document.getElementById('btn-dash-za')) document.getElementById('btn-dash-za').classList.toggle('active', mode === 'DASH_ZA');
+    if(document.getElementById('btn-dash-pt')) document.getElementById('btn-dash-pt').classList.toggle('active', mode === 'DASH_PT');
 
     const panelEM = document.getElementById('summary-panel');
     const panelZA = document.getElementById('summary-panel-za');
     const panelPuntuales = document.getElementById('summary-puntuales');
-    const container = document.getElementById('matrix-container');
-
-    container.removeAttribute('style');
-
+    const containerMap = document.getElementById('matrix-container');
     const layerContainer = document.getElementById('za-layer-container');
+
+    if (containerMap) {
+        containerMap.removeAttribute('style');
+        containerMap.style.height = 'calc(100vh - 220px)'; 
+        containerMap.style.overflow = 'auto'; 
+        containerMap.style.padding = '20px';
+        containerMap.innerHTML = '';
+    }
+
     if (mode === 'EM') {
-        document.getElementById('toolbar-em').style.display = 'flex';
-        document.getElementById('filter-block-container').style.display = 'inline-block';
+        if(containerMap) containerMap.style.padding = '0px';
+        if(document.getElementById('toolbar-em')) document.getElementById('toolbar-em').style.display = 'flex';
+        if(document.getElementById('filter-block-container')) document.getElementById('filter-block-container').style.display = 'inline-block';
         if(panelEM) panelEM.style.display = 'block';
         if(panelZA) panelZA.style.display = 'none';
         if(panelPuntuales) panelPuntuales.style.display = 'none';
         if(layerContainer) layerContainer.style.display = 'none';
-    } else {
-        document.getElementById('toolbar-em').style.display = 'none';
-        document.getElementById('filter-block-container').style.display = 'none';
+    } else if (mode === 'ZA') {
+        if(containerMap) containerMap.style.padding = '0px';
+        if(document.getElementById('toolbar-em')) document.getElementById('toolbar-em').style.display = 'none';
+        if(document.getElementById('filter-block-container')) document.getElementById('filter-block-container').style.display = 'none';
         if(panelEM) panelEM.style.display = 'none';
         if(panelZA) panelZA.style.display = 'block';
         if(panelPuntuales) panelPuntuales.style.display = 'flex';
@@ -122,16 +123,36 @@ function setAppMode(mode) {
         if (icon) icon.classList.remove('collapsed');
         const viewport = document.getElementById('zanjas-viewport');
         if (viewport) viewport.classList.remove('za-panel-collapsed');
+    } else {
+        if(document.getElementById('toolbar-em')) document.getElementById('toolbar-em').style.display = 'none';
+        if(document.getElementById('filter-block-container')) document.getElementById('filter-block-container').style.display = 'none';
+        if(panelEM) panelEM.style.display = 'none';
+        if(panelZA) panelZA.style.display = 'none';
+        if(panelPuntuales) panelPuntuales.style.display = 'none';
+        if(layerContainer) layerContainer.style.display = 'none';
     }
     
     pzScale = 1; pzPointX = 0; pzPointY = 0;
     renderMatrixSelector();
 }
 
-function getFechaProduccion() {
-    const inputFecha = document.getElementById('fecha-produccion');
-    if (inputFecha && inputFecha.value) return inputFecha.value;
-    return new Date().toISOString().split('T')[0];
+async function limpiarProyecto() {
+    if(confirm("¿Seguro que quieres borrar el diseño del plano para subir uno nuevo? (Tus avances coloreados NO se borrarán)")) {
+        PARQUE_MASTER = {}; 
+        PARQUE_ESTACIONES = {};
+        PARQUE_CAJAS = {}; 
+        PARQUE_ZANJAS = {}; 
+        PARQUE_PUNTUALES = {};
+        
+        await localforage.setItem('PARQUE_MASTER_DATA', PARQUE_MASTER);
+        await localforage.setItem('PARQUE_ESTACIONES_DATA', PARQUE_ESTACIONES);
+        await localforage.setItem('PARQUE_CAJAS_DATA', PARQUE_CAJAS);
+        await localforage.setItem('PARQUE_ZANJAS_DATA', PARQUE_ZANJAS);
+        await localforage.setItem('PARQUE_PUNTUALES_DATA', PARQUE_PUNTUALES);
+        
+        alert("Pizarra limpia. Ya puedes cargar tus Excel.");
+        window.location.reload();
+    }
 }
 
 async function importarArchivos(input) {
@@ -140,13 +161,6 @@ async function importarArchivos(input) {
     const btn = document.getElementById('btn-import');
     if (btn) btn.innerText = "⏳ Procesando...";
     let ultimoArcoDetectado = '';
-
-    // Limpiar datos globales para evitar mezclar con datos antiguos de localforage
-    PARQUE_MASTER = {};
-    PARQUE_ESTACIONES = {};
-    PARQUE_CAJAS = {};
-    PARQUE_ZANJAS = {};
-    PARQUE_PUNTUALES = {};
 
     const MAX_FILE_SIZE = 20 * 1024 * 1024;
 
@@ -176,18 +190,13 @@ async function importarArchivos(input) {
     }
 
     try {
-        // Limpiar localforage antes de guardar datos frescos
-        await localforage.removeItem('PARQUE_MASTER_DATA');
-        await localforage.removeItem('PARQUE_ESTACIONES_DATA');
-        await localforage.removeItem('PARQUE_CAJAS_DATA');
-        await localforage.removeItem('PARQUE_ZANJAS_DATA');
-        await localforage.removeItem('PARQUE_PUNTUALES_DATA');
         await localforage.setItem('PARQUE_MASTER_DATA', PARQUE_MASTER);
         await localforage.setItem('PARQUE_ESTACIONES_DATA', PARQUE_ESTACIONES);
         await localforage.setItem('PARQUE_CAJAS_DATA', PARQUE_CAJAS);
         await localforage.setItem('PARQUE_ZANJAS_DATA', PARQUE_ZANJAS);
         await localforage.setItem('PARQUE_PUNTUALES_DATA', PARQUE_PUNTUALES);
     } catch (e) { console.error("Error IndexedDB:", e); }
+    
     if (btn) { btn.innerText = `✅ ¡Cargado!`; setTimeout(() => btn.innerText = "📂 Cargar Listados", 2000); }
     input.value = '';
     actualizarSelectores(ultimoArcoDetectado);
@@ -201,28 +210,12 @@ function detectarArco(id) {
     return match ? `ARC${match[1] || match[2]}` : 'S/A';
 }
 
-function stripAccents(s) {
-    return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-}
-
-function flexibleFind(row, ...candidates) {
-    const keys = Object.keys(row);
-    const norm = (s) => stripAccents(s).toUpperCase().replace(/[\s\-\_]+/g, '');
-    for (const name of candidates) {
-        if (row[name] !== undefined && row[name] !== null && row[name] !== '') return row[name];
-        const nameNorm = norm(name);
-        const match = keys.find(k => norm(k) === nameNorm || norm(k).includes(nameNorm));
-        if (match !== undefined && row[match] !== undefined && row[match] !== null && row[match] !== '') return row[match];
-    }
-    return undefined;
-}
-
 function procesarDatosJSON(data, fileArco) {
     let arcoEnEsteArchivo = fileArco || '';
     
     if (!arcoEnEsteArchivo) {
         for (let i = 0; i < data.length; i++) {
-            let val = String(flexibleFind(data[i], 'CODIGO', 'REFERENCIA', 'TIPO', 'CAPA') || '').toUpperCase();
+            let val = String(data[i]['CODIGO'] || data[i]['REFERENCIA'] || data[i]['TIPO'] || data[i]['CAPA'] || '').toUpperCase();
             let m = val.match(/ARCO\s*(\d+)|ARC\s*(\d+)/);
             if (m) { arcoEnEsteArchivo = `ARC${m[1] || m[2]}`; break; }
         }
@@ -231,17 +224,12 @@ function procesarDatosJSON(data, fileArco) {
 
     data.forEach(rawRow => {
         let row = {};
-        for (let key in rawRow) row[stripAccents(key).trim().toUpperCase()] = rawRow[key];
+        for (let key in rawRow) row[key.trim().toUpperCase()] = rawRow[key];
         
-        // 1. ZANJAS (Lector flexible restaurado)
-        const xInicio = flexibleFind(row, 'X INICIO', 'X_INICIO', 'X-INICIO', 'X INI', 'XINI', 'XSTART');
-        const yInicio = flexibleFind(row, 'Y INICIO', 'Y_INICIO', 'Y-INICIO', 'Y INI', 'YINI', 'YSTART');
-        const xFin = flexibleFind(row, 'X FIN', 'X_FIN', 'X-FIN', 'X FINAL', 'XEND');
-        const yFin = flexibleFind(row, 'Y FIN', 'Y_FIN', 'Y-FIN', 'Y FINAL', 'YEND');
-        if (xInicio !== undefined && yInicio !== undefined && xFin !== undefined && yFin !== undefined) {
-            const x1 = parseCoord(xInicio), y1 = parseCoord(yInicio);
-            const x2 = parseCoord(xFin), y2 = parseCoord(yFin);
-            const ref = flexibleFind(row, 'REFERENCIA', 'REFERENCIA (LINEAL)', 'REFERENCIA LINEAL', 'LINEA', 'LINEA ZANJA', 'REF', 'TIPO', 'TIPO ZANJA', 'TIPO_ZANJA', 'TIPO DE ZANJA', 'CAPA', 'CATEGORIA', 'DESCRIPCION', 'DESCRIPCIÓN', 'ZANJA', 'CODIGO') || 'ZANJA';
+        if (row['X INICIO'] !== undefined && row['Y INICIO'] !== undefined && row['X FIN'] !== undefined && row['Y FIN'] !== undefined) {
+            const x1 = parseCoord(row['X INICIO']), y1 = parseCoord(row['Y INICIO']);
+            const x2 = parseCoord(row['X FIN']), y2 = parseCoord(row['Y FIN']);
+            const ref = row['REFERENCIA'] || row['REFERENCIA (LINEAL)'] || row['TIPO'] || row['CAPA'] || 'ZANJA';
             
             if (x1 !== 0 && y1 !== 0 && x2 !== 0 && y2 !== 0) {
                 const safeRef = String(ref).replace(/[\.\-\s]/g, '_'); 
@@ -251,12 +239,11 @@ function procesarDatosJSON(data, fileArco) {
             return; 
         }
 
-        // 2. ELEMENTOS PUNTUALES (Lector flexible restaurado)
-        const refPuntual = flexibleFind(row, 'REFERENCIA', 'CODIGO', 'TIPO', 'CAPA');
-        const xp = parseCoord(flexibleFind(row, 'X', 'X_INICIO', 'X INICIO') || 0);
-        const yp = parseCoord(flexibleFind(row, 'Y', 'Y_INICIO', 'Y INICIO') || 0);
+        const refPuntual = row['REFERENCIA'] || row['CODIGO'] || row['TIPO'] || row['CAPA'];
+        const xp = parseCoord(row['X']);
+        const yp = parseCoord(row['Y']);
         
-        if (refPuntual && xp !== 0 && yp !== 0 && flexibleFind(row, 'FILA') === undefined && flexibleFind(row, 'HINCA') === undefined && !String(refPuntual).toUpperCase().includes('-SB-') && !String(refPuntual).toUpperCase().includes('-PS-')) {
+        if (refPuntual && xp !== 0 && yp !== 0 && row['FILA'] === undefined && row['HINCA'] === undefined && !String(refPuntual).toUpperCase().includes('-SB-') && !String(refPuntual).toUpperCase().includes('-PS-')) {
             const upRef = String(refPuntual).toUpperCase();
             if (upRef.includes('ARQUETA') || upRef.includes('BÁCULO') || upRef.includes('BACULO') || upRef.includes('PVH') || upRef.includes('TORRE') || upRef.includes('AGRUPAMIENTO') || upRef.includes('FC-') || upRef.includes('GATEWAY') || upRef.includes('MBOX') || upRef.includes('TBOX') || upRef.includes('METEO') || upRef.includes('CSB') || upRef.includes('CCTV')) {
                 const safePRef = String(upRef).replace(/[\.\-\s]/g, '_'); 
@@ -266,9 +253,8 @@ function procesarDatosJSON(data, fileArco) {
             }
         }
 
-        // 3. TRACKERS Y CAJAS SCB
-        const tId = flexibleFind(row, 'CODIGO', 'REFERENCIA', 'TIPO', 'CAPA');
-        const rawX = flexibleFind(row, 'X', 'X_INICIO', 'X INICIO'), rawY = flexibleFind(row, 'Y', 'Y_INICIO', 'Y INICIO');
+        const tId = row['CODIGO'] || row['REFERENCIA'] || row['TIPO'] || row['CAPA'];
+        const rawX = row['X'], rawY = row['Y'];
         
         if (!tId || rawX === undefined || rawY === undefined) return;
         const tIdStr = String(tId).trim().toUpperCase();
@@ -277,7 +263,7 @@ function procesarDatosJSON(data, fileArco) {
         const x = parseCoord(rawX), y = parseCoord(rawY);
         if (x === 0 && y === 0) return;
 
-        if (flexibleFind(row, 'PUNTO') !== undefined || tIdStr.includes('-PS-')) {
+        if (row['PUNTO'] !== undefined || tIdStr.includes('-PS-')) {
             const match = tIdStr.match(/ARCO\s*(\d+)|ARC\s*(\d+)/);
             const arcoPS = match ? `ARC${match[1] || match[2]}` : 'S/A';
             const blockPS = tIdStr.split('-').pop().trim();
@@ -296,7 +282,7 @@ function procesarDatosJSON(data, fileArco) {
             return; 
         }
 
-        const block = flexibleFind(row, 'BLOQUE', 'BLOCK', 'ZONA', 'SECTOR') || 'S/B', filaNum = flexibleFind(row, 'FILA', 'ROW', 'LINEA'), hincaIndex = flexibleFind(row, 'HINCA', 'POSTE', 'HINCA N.', 'Nº HINCA');
+        const block = row['BLOQUE'] || 'S/B', filaNum = row['FILA'], hincaIndex = row['HINCA'];
         if (filaNum === undefined || filaNum === null || hincaIndex === undefined || hincaIndex === null) return;
         const arcoId = detectarArco(tIdStr);
 
@@ -335,7 +321,10 @@ function actualizarBloques() {
 }
 
 function renderMatrixSelector() {
-    if (currentAppMode === 'EM') { renderMatrix(); } else { renderMatrixZanjas(); }
+    if (currentAppMode === 'EM') { renderMatrix(); } 
+    else if (currentAppMode === 'ZA') { renderMatrixZanjas(); } 
+    else if (currentAppMode === 'DASH_ZA') { renderDashboardZanjas(); } 
+    else if (currentAppMode === 'DASH_PT') { renderDashboardPuntuales(); }
 }
 
 async function renderMatrix() {
@@ -372,7 +361,7 @@ async function renderMatrix() {
         const canvasWidth = (rX * SCALE_X) + (MARGIN_LEFT * 2);
         const canvasHeight = (rY * SCALE_Y) + (MARGIN_TOP_BOTTOM * 2) + 300; 
         
-        let parts = [`<div class="map-canvas" style="position: relative; min-width: ${canvasWidth}px; min-height: ${canvasHeight}px;">`];
+        let html = `<div class="map-canvas" style="position: relative; min-width: ${canvasWidth}px; min-height: ${canvasHeight}px;">`;
         
         for (let id of psIds) {
             const ps = PARQUE_ESTACIONES[id];
@@ -381,7 +370,7 @@ async function renderMatrix() {
             let wS = ((ps.maxX - ps.minX) * SCALE_X); let pxH = ((ps.maxY - ps.minY) * SCALE_Y);
             if (wS < 60) wS = 60; if (pxH < 40) pxH = 40; 
             const letra = ps.name.split('-').pop(); const safeName = escapeHtml(`PS-${letra}`); 
-            parts.push(`<div class="power-station" style="position: absolute; left: ${pxX}px; top: ${pxY}px; width: ${wS}px; height: ${pxH}px;" title="${escapeHtml(ps.name)}"><span style="font-size: 16px; margin-bottom: 2px;">⚡</span><span>${safeName}</span></div>`);
+            html += `<div class="power-station" style="position: absolute; left: ${pxX}px; top: ${pxY}px; width: ${wS}px; height: ${pxH}px;" title="${escapeHtml(ps.name)}"><span style="font-size: 16px; margin-bottom: 2px;">⚡</span><span>${safeName}</span></div>`;
         }
 
         for (let id of sbIds) {
@@ -393,7 +382,7 @@ async function renderMatrix() {
             let colorClass = 'sb-red'; if(count === 6) colorClass = 'sb-green'; else if(count > 0) colorClass = 'sb-orange';
             const numCaja = sb.name.split('-').slice(2).join('-').split('_')[0];
             const safeId = escapeJsStr(id);
-            parts.push(`<div id="sb-${safeId}" class="string-box ${colorClass}" style="position: absolute; left: ${pxX}px; top: ${pxY}px; width: ${wS}px; height: ${pxH}px;" title="Ver Checklist" onclick="abrirModalCaja('${safeId}')"><span>${escapeHtml(numCaja)}</span></div>`);
+            html += `<div id="sb-${safeId}" class="string-box ${colorClass}" style="position: absolute; left: ${pxX}px; top: ${pxY}px; width: ${wS}px; height: ${pxH}px;" title="Ver Checklist" onclick="abrirModalCaja('${safeId}')"><span>${escapeHtml(numCaja)}</span></div>`;
         }
 
         for (let id of ids) {
@@ -405,27 +394,26 @@ async function renderMatrix() {
             const esM = filas.length === 1;
             let wS = !esM ? `width: ${((tr.maxX - tr.minX) * SCALE_X) + 22}px; justify-content: space-between;` : `justify-content: center;`;
             
-            parts.push(`<div class="prod-card map-card" style="position: absolute; left: ${pxX}px; top: ${pxY}px; height: ${pxH}px; ${wS}">`);
+            html += `<div class="prod-card map-card" style="position: absolute; left: ${pxX}px; top: ${pxY}px; height: ${pxH}px; ${wS}">`;
             const safeId = escapeJsStr(id);
             const safeName = escapeHtml(tr.name.split('-').slice(-2).join('-'));
-            parts.push(`<div class="tracker-title" style="cursor:pointer;" onclick="paintTracker('${safeId}')" title="Pintar tracker completo">${safeName}</div>`);
+            html += `<div class="tracker-title" style="cursor:pointer;" onclick="paintTracker('${safeId}')" title="Pintar tracker completo">${safeName}</div>`;
             for (let fN of filas) {
                 const f = tr.filas[fN];
                 let tT = fN == 2 ? 'MOT' : 'GEM'; let cT = fN == 2 ? 'motora' : 'gemela'; if (esM) { tT = 'MONO'; cT = 'mono'; }
-                parts.push(`<div class="row-container"><div class="row-tag ${cT}" style="cursor:pointer;" onclick="paintRow('${safeId}', '${fN}')" title="Pintar fila completa">${tT}</div><div class="cells-grid">`);
+                html += `<div class="row-container"><div class="row-tag ${cT}" style="cursor:pointer;" onclick="paintRow('${safeId}', '${fN}')" title="Pintar fila completa">${tT}</div><div class="cells-grid">`;
                 for (let h = 1; h <= f.hincas; h++) {
                     const hId = `${id}-F${fN}-H${h}`;
                     const safeHId = escapeJsStr(hId);
                     const rawData = HISTORIAL_PROD[hId];
                     const s = (rawData && typeof rawData === 'object') ? (rawData.estado || '') : (rawData || '');
-                    parts.push(`<div class="cell" id="${safeHId}" onclick="paint('${safeHId}')" style="background-color:${getStyleByStatus(s)}; color: ${s==='' ? 'transparent' : '#333'};">${s}</div>`);
+                    html += `<div class="cell" id="${safeHId}" onclick="paint('${safeHId}')" style="background-color:${getStyleByStatus(s)}; color: ${s==='' ? 'transparent' : '#333'};">${s}</div>`;
                 }
-                parts.push(`</div></div>`);
+                html += `</div></div>`;
             }
-            parts.push(`</div>`);
+            html += `</div>`;
         }
-        parts.push('</div>');
-        container.innerHTML = parts.join('');
+        container.innerHTML = html + '</div>';
         
         const bName = document.getElementById('summary-block-name');
         if (bName) bName.innerText = `Arco ${arco.replace('ARC','')} - Bloque ${block}`;
@@ -440,9 +428,6 @@ async function renderMatrix() {
 function initPanEM() {
     const container = document.getElementById('matrix-container');
     if (!container) return;
-
-    if (container.dataset.panEmInit === '1') return;
-    container.dataset.panEmInit = '1';
 
     let isDragging = false;
     let startX, startY, sLeft, sTop;
@@ -494,13 +479,17 @@ function initPanEM() {
 }
 
 function normalizeZanjaType(ref) {
-    const r = String(ref).toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[\s\-\_\.]+/g, '');
-    if (r.includes('ENTRADAPS')) return 'ENTRADA_PS';
-    if (r.includes('MT') || r.includes('MEDIATENSION')) return 'MT';
-    if (r.includes('BT') || r.includes('BAJATENSION')) return 'BT';
-    if (r.includes('SSAA') || r.includes('SAA') || r.includes('AUXILIAR')) return 'SSAA';
-    if (r.includes('ZANJAG') || r.includes('PAT')) return 'PAT';
-    if (r.includes('CCTV') || r.includes('LEA') || r.includes('FIBRA') || r.includes('COMUNICACION')) return 'CCTV';
+    const r = String(ref).toUpperCase();
+    if (r.includes('ENTRADA-PS') || r.includes('ENTRADA PS') || r.includes('ENTRADAPS')) return 'ENTRADA_PS';
+    if (r.includes('MT')) return 'MT';
+    if (r.includes('BT')) return 'BT';
+    if (r.includes('SSAA')) return 'SSAA';
+    if (r.includes('ZANJA G') || r.includes('ZANJA-G') || r.includes('ZANJA_G')) return 'PAT';
+    if (r.includes('CCTV')) return 'CCTV';
+    if (r.includes('LEA')) return 'CCTV';
+    
+    if (r.includes('LECA')) return 'OTRAS';
+    
     return 'OTRAS';
 }
 
@@ -581,12 +570,13 @@ function renderMatrixZanjas() {
             if (pzPointY < 0) pzPointY = 50;
         }
         
-        let parts = [`<div id="zanjas-viewport" style="width: 100%; height: 70vh; min-height: 500px; overflow: hidden; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; position: relative; margin-top: 10px; cursor: grab;">`];
-        parts.push(`<div id="pan-zoom-layer" style="position: absolute; width: ${canvasWidth}px; height: ${canvasHeight}px; transform: translate(${pzPointX}px, ${pzPointY}px) scale(${pzScale}); transform-origin: 0 0;">`);
+        let html = `<div id="zanjas-viewport" style="width: 100%; height: 70vh; min-height: 500px; overflow: hidden; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; position: relative; margin-top: 10px; cursor: grab;">`;
+        html += `<div id="pan-zoom-layer" style="position: absolute; width: ${canvasWidth}px; height: ${canvasHeight}px; transform: translate(${pzPointX}px, ${pzPointY}px) scale(${pzScale}); transform-origin: 0 0;">`;
         
-        let svgParts = [`<svg style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:10;">`];
+        let svgHtml = `<svg style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:10;">`;
         
-        let metrosPorTipo = { 'MT': 0, 'BT': 0, 'SSAA': 0, 'PAT': 0, 'CCTV': 0, 'ENTRADA_PS': 0, 'OTRAS': 0 };
+        let zanjaMetrosTotal = 0;
+        let metrosPorTipo = { 'MT': 0, 'BT': 0, 'SSAA': 0, 'PAT': 0, 'CCTV': 0, 'ENTRADA_PS': 0 };
         
         zValues.forEach(z => {
             const dx = z.x2 - z.x1; const dy = z.y2 - z.y1;
@@ -596,14 +586,16 @@ function renderMatrixZanjas() {
             metrosPorTipo[type] = (metrosPorTipo[type] || 0) + longitud;
             if (!zaLayerState.zanja[type]) return;
             
+            zanjaMetrosTotal += longitud;
+
             const pxX1 = ((z.x1 - gMinX) * baseScaleX) + MARGIN; const pxY1 = ((gMaxY - z.y1) * baseScaleY) + MARGIN;
             const pxX2 = ((z.x2 - gMinX) * baseScaleX) + MARGIN; const pxY2 = ((gMaxY - z.y2) * baseScaleY) + MARGIN;
             const strokeColor = getZanjaColorByType(type);
             
             const grosorFinal = 4 / pzScale;
-            const zAlertMsg = escapeJsStr(`Zanja detectada:\nTipo: ${type}\nRef: ${z.ref}`);
+            const safeZId = escapeJsStr(z.id);
             
-            svgParts.push(`<line x1="${pxX1}" y1="${pxY1}" x2="${pxX2}" y2="${pxY2}" stroke="${strokeColor}" stroke-width="${grosorFinal}" stroke-linecap="round" style="pointer-events:auto; cursor:pointer;" onclick="alert('${zAlertMsg}')"></line>`);
+            svgHtml += `<line x1="${pxX1}" y1="${pxY1}" x2="${pxX2}" y2="${pxY2}" stroke="${strokeColor}" stroke-width="${grosorFinal}" stroke-linecap="round" style="pointer-events:auto; cursor:pointer;" onclick="abrirModalZanja('${safeZId}')"></line>`;
 
             if (type !== 'ENTRADA_PS') {
                 const pLen = Math.sqrt(Math.pow(pxX2 - pxX1, 2) + Math.pow(pxY2 - pxY1, 2));
@@ -616,7 +608,7 @@ function renderMatrixZanjas() {
                         let f = i / (numTexts + 1);
                         let cx = pxX1 + (pxX2 - pxX1) * f;
                         let cy = pxY1 + (pxY2 - pxY1) * f;
-                        svgParts.push(`<text class="za-cut-text" x="${cx}" y="${cy}" fill="${strokeColor}" font-size="${10 / pzScale}" font-weight="900" font-family="sans-serif" text-anchor="middle" dominant-baseline="central" transform="rotate(${angle}, ${cx}, ${cy})" style="pointer-events:none;" paint-order="stroke" stroke="#f8fafc" stroke-width="${5 / pzScale}">${type}</text>`);
+                        svgHtml += `<text class="za-cut-text" x="${cx}" y="${cy}" fill="${strokeColor}" font-size="${10 / pzScale}" font-weight="900" font-family="sans-serif" text-anchor="middle" dominant-baseline="central" transform="rotate(${angle}, ${cx}, ${cy})" style="pointer-events:none;" paint-order="stroke" stroke="#f8fafc" stroke-width="${5 / pzScale}">${type}</text>`;
                     }
                 }
             }
@@ -642,7 +634,7 @@ function renderMatrixZanjas() {
                 let count = contarChecksPuntual(checks, 'arqueta');
                 let fillCol = getColorPuntual(count, 6);
 
-                svgParts.push(`<rect id="pt-${pIdSafe}" x="${pxX - s/2}" y="${pxY - s/2}" width="${s}" height="${s}" fill="${fillCol}" stroke="${c}" stroke-width="${sw}" style="pointer-events:auto; cursor:pointer;" onclick="abrirModalPuntual('${pIdSafe}', 'arqueta', '${escapeJsStr(p.ref)}')"></rect>`);
+                svgHtml += `<rect id="pt-${pIdSafe}" x="${pxX - s/2}" y="${pxY - s/2}" width="${s}" height="${s}" fill="${fillCol}" stroke="${c}" stroke-width="${sw}" style="pointer-events:auto; cursor:pointer;" onclick="abrirModalPuntual('${pIdSafe}', 'arqueta', '${escapeJsStr(p.ref)}')"></rect>`;
             } 
             else if (refUp.includes('POSTE CAJA')) {
                 countsPT.csb++;
@@ -655,9 +647,9 @@ function renderMatrixZanjas() {
                 const s2 = s/2;
                 const triPath = `M ${pxX},${pxY - s2} L ${pxX + s2},${pxY + s2} L ${pxX - s2},${pxY + s2} Z`;
                 
-                svgParts.push(`<path id="pt-${pIdSafe}" d="${triPath}" fill="${fillCol}" stroke="${c}" stroke-width="${sw}" style="pointer-events:auto; cursor:pointer;" onclick="abrirModalPuntual('${pIdSafe}', 'box', '${escapeJsStr(p.ref)}')"/>`);
-                svgParts.push(`<circle cx="${pxX}" cy="${pxY + 2.5}" r="1.5" fill="${c}" style="pointer-events:none;"></circle>`);
-                svgParts.push(`<text x="${pxX}" y="${pxY - s2 - 4}" fill="${c}" font-size="9" font-weight="bold" text-anchor="middle" font-family="sans-serif" style="pointer-events:none;">CSB</text>`);
+                svgHtml += `<path id="pt-${pIdSafe}" d="${triPath}" fill="${fillCol}" stroke="${c}" stroke-width="${sw}" style="pointer-events:auto; cursor:pointer;" onclick="abrirModalPuntual('${pIdSafe}', 'box', '${escapeJsStr(p.ref)}')"/>`;
+                svgHtml += `<circle cx="${pxX}" cy="${pxY + 2.5}" r="1.5" fill="${c}" style="pointer-events:none;"></circle>`; 
+                svgHtml += `<text x="${pxX}" y="${pxY - s2 - 4}" fill="${c}" font-size="9" font-weight="bold" text-anchor="middle" font-family="sans-serif" style="pointer-events:none;">CSB</text>`;
             }
             else if (refUp.includes('BÁCULO-CCTV') || refUp.includes('BACULO-CCTV') || refUp.includes('CCTV') || refUp.includes('FC-')) {
                 if (!zaLayerState.puntual.cctv) return;
@@ -675,9 +667,9 @@ function renderMatrixZanjas() {
                 const o = r * 0.7071; 
                 let safeRef = refUp.includes('FC-') ? 'CCTV / FC' : escapeJsStr(p.ref);
                 
-                svgParts.push(`<circle id="pt-${pIdSafe}" cx="${pxX}" cy="${pxY}" r="${r}" fill="${fillCol}" stroke="${c}" stroke-width="${sw}" style="pointer-events:auto; cursor:pointer;" onclick="abrirModalPuntual('${pIdSafe}', 'baculo', '${safeRef}')"></circle>`);
-                svgParts.push(`<line x1="${pxX - o}" y1="${pxY - o}" x2="${pxX + o}" y2="${pxY + o}" stroke="${c}" stroke-width="${sw}" style="pointer-events:none;"></line>`);
-                svgParts.push(`<line x1="${pxX - o}" y1="${pxY + o}" x2="${pxX + o}" y2="${pxY - o}" stroke="${c}" stroke-width="${sw}" style="pointer-events:none;"></line>`);
+                svgHtml += `<circle id="pt-${pIdSafe}" cx="${pxX}" cy="${pxY}" r="${r}" fill="${fillCol}" stroke="${c}" stroke-width="${sw}" style="pointer-events:auto; cursor:pointer;" onclick="abrirModalPuntual('${pIdSafe}', 'baculo', '${safeRef}')"></circle>`;
+                svgHtml += `<line x1="${pxX - o}" y1="${pxY - o}" x2="${pxX + o}" y2="${pxY + o}" stroke="${c}" stroke-width="${sw}" style="pointer-events:none;"></line>`;
+                svgHtml += `<line x1="${pxX - o}" y1="${pxY + o}" x2="${pxX + o}" y2="${pxY - o}" stroke="${c}" stroke-width="${sw}" style="pointer-events:none;"></line>`;
             }
             else if (refUp.includes('GATEWAY') || refUp.includes('MBOX') || refUp.includes('TBOX') || refUp.includes('METEO')) {
                 let shortName = 'PVH';
@@ -698,21 +690,21 @@ function renderMatrixZanjas() {
                 const s2 = s/2;
                 const triPath = `M ${pxX},${pxY - s2} L ${pxX + s2},${pxY + s2} L ${pxX - s2},${pxY + s2} Z`;
 
-                svgParts.push(`<path id="pt-${pIdSafe}" d="${triPath}" fill="${fillCol}" stroke="${c}" stroke-width="${sw}" style="pointer-events:auto; cursor:pointer;" onclick="abrirModalPuntual('${pIdSafe}', '${pType}', '${escapeJsStr(shortName)}')"/>`);
-                svgParts.push(`<circle cx="${pxX}" cy="${pxY + 2.5}" r="1.5" fill="${c}" style="pointer-events:none;"></circle>`);
-                svgParts.push(`<text x="${pxX}" y="${pxY - s2 - 4}" fill="${c}" font-size="9" font-weight="bold" text-anchor="middle" font-family="sans-serif" style="pointer-events:none;">${escapeHtml(shortName)}</text>`);
+                svgHtml += `<path id="pt-${pIdSafe}" d="${triPath}" fill="${fillCol}" stroke="${c}" stroke-width="${sw}" style="pointer-events:auto; cursor:pointer;" onclick="abrirModalPuntual('${pIdSafe}', '${pType}', '${escapeJsStr(shortName)}')"/>`;
+                svgHtml += `<circle cx="${pxX}" cy="${pxY + 2.5}" r="1.5" fill="${c}" style="pointer-events:none;"></circle>`; 
+                svgHtml += `<text x="${pxX}" y="${pxY - s2 - 4}" fill="${c}" font-size="9" font-weight="bold" text-anchor="middle" font-family="sans-serif" style="pointer-events:none;">${escapeHtml(shortName)}</text>`; 
             }
         });
 
-        svgParts.push(`</svg>`);
-        parts.push(svgParts.join(''));
+        svgHtml += `</svg>`;
+        html += svgHtml;
 
         for (let id of sbIds) {
             const sb = PARQUE_CAJAS[id];
             const pxX = (((sb.minX + sb.maxX) / 2 - gMinX) * baseScaleX) + MARGIN; 
             const pxY = ((gMaxY - sb.maxY) * baseScaleY) + MARGIN;
             const numCaja = sb.name.split('-').slice(2).join('-').split('_')[0];
-            parts.push(`<div style="position: absolute; left: ${pxX}px; top: ${pxY}px; width: 24px; height: 14px; background: rgba(226, 232, 240, 0.7); border: 1px solid #cbd5e1; border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 8px; color: #94a3b8; font-weight: bold; pointer-events: none; z-index: 1;">${escapeHtml(numCaja)}</div>`);
+            html += `<div style="position: absolute; left: ${pxX}px; top: ${pxY}px; width: 24px; height: 14px; background: rgba(226, 232, 240, 0.7); border: 1px solid #cbd5e1; border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 8px; color: #94a3b8; font-weight: bold; pointer-events: none; z-index: 1;">${escapeHtml(numCaja)}</div>`;
         }
 
         for (let id of ids) {
@@ -721,11 +713,11 @@ function renderMatrixZanjas() {
             let pxH = ((tr.maxY - tr.minY) * baseScaleY); if (pxH < 40) pxH = 40; 
             const safeName = escapeHtml(tr.name.split('-').slice(-2).join('-'));
             let wS_ZA = ((tr.maxX - tr.minX) * baseScaleX) || 15;
-            parts.push(`<div style="position: absolute; left: ${pxX}px; top: ${pxY}px; width: ${wS_ZA}px; height: ${pxH}px; background: rgba(226, 232, 240, 0.7); border: 1px solid #cbd5e1; border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 8px; color: #94a3b8; font-weight: bold; pointer-events: none; z-index: 2;">${safeName}</div>`);
+            html += `<div style="position: absolute; left: ${pxX}px; top: ${pxY}px; width: ${wS_ZA}px; height: ${pxH}px; background: rgba(226, 232, 240, 0.7); border: 1px solid #cbd5e1; border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 8px; color: #94a3b8; font-weight: bold; pointer-events: none; z-index: 2;">${safeName}</div>`;
         }
         
-        parts.push(`</div></div>`);
-        container.innerHTML = parts.join('');
+        html += `</div></div>`;
+        container.innerHTML = html;
         
         const arcoNameZA = document.getElementById('summary-arco-name-za');
         if (arcoNameZA) arcoNameZA.innerText = `Arco ${arco.replace('ARC','')}`;
@@ -740,7 +732,7 @@ function renderMatrixZanjas() {
         setTxt('sum-za-pat', Math.round(metrosPorTipo['PAT']) + " m");
         setTxt('sum-za-cctv', Math.round(metrosPorTipo['CCTV']) + " m");
         setTxt('sum-za-entradaps', Math.round(metrosPorTipo['ENTRADA_PS']) + " m");
-        setTxt('sum-za-otras', Math.round(metrosPorTipo['OTRAS']) + " m");
+        setTxt('sum-za-otras', Math.round(metrosPorTipo['OTRAS'] || 0) + " m");
         
         setTxt('sum-pt-arqueta', countsPT.arqueta);
         setTxt('sum-pt-gateway', countsPT.gateway);
@@ -849,6 +841,15 @@ function initPanZoomZanjas() {
         pzPointX = mouseX - xs * pzScale;
         pzPointY = mouseY - ys * pzScale;
         layer.style.transform = `translate(${pzPointX}px, ${pzPointY}px) scale(${pzScale})`;
+        
+        document.querySelectorAll('#zanjas-viewport line').forEach(line => { 
+            line.setAttribute('stroke-width', 4 / pzScale); 
+        });
+        
+        document.querySelectorAll('#zanjas-viewport text.za-cut-text').forEach(txt => { 
+            txt.setAttribute('font-size', 10 / pzScale); 
+            txt.setAttribute('stroke-width', 5 / pzScale); 
+        });
     }, { passive: false });
 }
 
@@ -887,14 +888,14 @@ function cerrarModalCaja() {
 
 async function toggleCheckCaja(id, item, isChecked) {
     if (!HISTORIAL_CAJAS[id]) HISTORIAL_CAJAS[id] = {};
-    const hoy = getFechaProduccion();
+    const hoy = document.getElementById('fecha-produccion') ? document.getElementById('fecha-produccion').value : '';
     
     if (isChecked) {
         HISTORIAL_CAJAS[id][item] = hoy;
     } else {
         delete HISTORIAL_CAJAS[id][item];
     }
-    debouncedSave('HISTORIAL_CAJAS', HISTORIAL_CAJAS);
+    try { await localforage.setItem('HISTORIAL_CAJAS', HISTORIAL_CAJAS); } catch (e) { console.error("Error al guardar historial de cajas:", e); }
 }
 
 function contarChecks(checks) {
@@ -938,10 +939,10 @@ function cerrarModalPuntual() {
 
 async function toggleCheckPuntual(id, item, isChecked) {
     if (!HISTORIAL_PUNTUALES[id]) HISTORIAL_PUNTUALES[id] = {};
-    const hoy = getFechaProduccion();
+    const hoy = document.getElementById('fecha-produccion') ? document.getElementById('fecha-produccion').value : '';
     if (isChecked) { HISTORIAL_PUNTUALES[id][item] = hoy; } 
     else { delete HISTORIAL_PUNTUALES[id][item]; }
-    debouncedSave('HISTORIAL_PUNTUALES', HISTORIAL_PUNTUALES);
+    try { await localforage.setItem('HISTORIAL_PUNTUALES', HISTORIAL_PUNTUALES); } catch (e) { console.error("Error al guardar historial puntuales:", e); }
 }
 
 const STATUS_COLORS = { 'H': '#ffeb3b', 'P': '#2196f3', 'T': '#9c27b0', 'O': '#00bcd4', 'M': '#4caf50', '': '#fff' };
@@ -1025,7 +1026,7 @@ function applyToCell(id, newTask, newLvlIdx, hoy) {
 async function paint(id) {
     const newTask = currentTask === 'NA' ? '' : currentTask;
     const newLvlIdx = getLevelIndex(newTask);
-    const hoy = getFechaProduccion();
+    const hoy = document.getElementById('fecha-produccion') ? document.getElementById('fecha-produccion').value : '';
 
     let raw = HISTORIAL_PROD[id];
     let data = getMigratedData(raw);
@@ -1037,14 +1038,14 @@ async function paint(id) {
 
     applyToCell(id, newTask, newLvlIdx, hoy);
 
-    debouncedSave('HISTORIAL_PROD', HISTORIAL_PROD);
+    try { await localforage.setItem('HISTORIAL_PROD', HISTORIAL_PROD); } catch (e) { console.error("Error al guardar historial:", e); }
     actualizarContadores();
 }
 
 async function paintRow(trackerId, filaNum) {
     const newTask = currentTask === 'NA' ? '' : currentTask;
     const newLvlIdx = getLevelIndex(newTask);
-    const hoy = getFechaProduccion();
+    const hoy = document.getElementById('fecha-produccion') ? document.getElementById('fecha-produccion').value : '';
     const tr = PARQUE_MASTER[trackerId];
     if (!tr || !tr.filas[filaNum]) return;
 
@@ -1066,14 +1067,14 @@ async function paintRow(trackerId, filaNum) {
         applyToCell(`${trackerId}-F${filaNum}-H${h}`, newTask, newLvlIdx, hoy);
     }
 
-    debouncedSave('HISTORIAL_PROD', HISTORIAL_PROD);
+    try { await localforage.setItem('HISTORIAL_PROD', HISTORIAL_PROD); } catch (e) { console.error("Error al guardar historial:", e); }
     actualizarContadores();
 }
 
 async function paintTracker(trackerId) {
     const newTask = currentTask === 'NA' ? '' : currentTask;
     const newLvlIdx = getLevelIndex(newTask);
-    const hoy = getFechaProduccion();
+    const hoy = document.getElementById('fecha-produccion') ? document.getElementById('fecha-produccion').value : '';
     const tr = PARQUE_MASTER[trackerId];
     if (!tr) return;
 
@@ -1099,7 +1100,7 @@ async function paintTracker(trackerId) {
         }
     }
 
-    debouncedSave('HISTORIAL_PROD', HISTORIAL_PROD);
+    try { await localforage.setItem('HISTORIAL_PROD', HISTORIAL_PROD); } catch (e) { console.error("Error al guardar historial:", e); }
     actualizarContadores();
 }
 
@@ -1163,6 +1164,7 @@ window.onload = async () => {
         const h = await localforage.getItem('HISTORIAL_PROD');
         const z = await localforage.getItem('PARQUE_ZANJAS_DATA'); 
         const pt = await localforage.getItem('PARQUE_PUNTUALES_DATA'); 
+        const hzanjas = await localforage.getItem('HISTORIAL_ZANJAS'); 
 
         if(s) PARQUE_MASTER = s; 
         if(ps) PARQUE_ESTACIONES = ps; 
@@ -1171,6 +1173,7 @@ window.onload = async () => {
         if(hp) HISTORIAL_PUNTUALES = hp;
         if(z) PARQUE_ZANJAS = z; 
         if(pt) PARQUE_PUNTUALES = pt; 
+        if(hzanjas) HISTORIAL_ZANJAS = hzanjas; 
 
         if (h) {
             for (let key in h) {
@@ -1184,3 +1187,203 @@ window.onload = async () => {
         console.error("Error al cargar datos:", error);
     }
 };
+
+function abrirModalZanja(id) {
+    cerrarModalZanja();
+    const z = PARQUE_ZANJAS[id];
+    if (!z) return;
+    
+    const dx = z.x2 - z.x1;
+    const dy = z.y2 - z.y1;
+    const longitud = Math.sqrt(dx*dx + dy*dy);
+    const maxMetros = Math.round(longitud);
+    
+    let stats = HISTORIAL_ZANJAS[id] || {};
+    
+    const items = [
+        {id: 'excavacion', label: '⛏️ 1. Excavación (profundidad y ancho)'},
+        {id: 'cama_arena', label: '⏳ 2. Cama de arena'},
+        {id: 'inspeccion_cables', label: '🔍 3. Inspección de cables'},
+        {id: 'ruteado_peinado', label: '🔌 4. Ruteado y peinado'},
+        {id: 'identificacion_cables', label: '🏷️ 5. Identificación cables'},
+        {id: 'cinta_seguridad', label: '🎀 6. Cinta seguridad'},
+        {id: 'cierre_zanja', label: '🪨 7. Cierre de zanja'}
+    ];
+    
+    const type = normalizeZanjaType(z.ref);
+    
+    let html = `
+    <div id="modal-zanja-overlay" class="modal-overlay" onclick="cerrarModalZanja()">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <h3>Zanja: <span style="color:var(--accent);">${escapeHtml(z.ref)}</span></h3>
+            <p style="margin-top:-8px; margin-bottom:20px; color:#64748b; font-size:13px;">Categoría: <strong>${type}</strong> | Longitud Total: <strong>${maxMetros} m</strong></p>
+            <div class="checklist" style="display:flex; flex-direction:column; gap:4px;">`;
+            
+    items.forEach(item => {
+        const val = stats[item.id] !== undefined ? stats[item.id] : '';
+        html += `
+        <div class="zanja-item" style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; gap:15px; font-size:14px; border-bottom:1px dashed #e2e8f0; padding-bottom:6px;">
+            <span style="font-weight:500; color:#334155;">${item.label}</span>
+            <div style="display:flex; align-items:center; gap:5px;">
+                <input type="number" min="0" max="${maxMetros}" placeholder="0" value="${val}" 
+                       style="width:75px; padding:5px; border:1px solid #cbd5e1; border-radius:6px; text-align:center; font-weight:bold; color:var(--accent);"
+                       oninput="changeMetrosZanja('${escapeJsStr(id)}', '${item.id}', this.value, ${maxMetros})">
+                <span style="color:#64748b; font-weight:600; font-size:13px; min-width:65px;">/ [${maxMetros} m]</span>
+            </div>
+        </div>`;
+    });
+    
+    html += `
+            </div>
+            <button class="btn-close" style="margin-top:15px; width:100%;" onclick="cerrarModalZanja()">Guardar y Cerrar</button>
+        </div>
+    </div>`;
+    
+    document.body.insertAdjacentHTML('beforeend', html);
+}
+
+function cerrarModalZanja() {
+    const m = document.getElementById('modal-zanja-overlay');
+    if(m) m.remove();
+}
+
+async function changeMetrosZanja(id, itemId, value, maxMetros) {
+    if (!HISTORIAL_ZANJAS[id]) HISTORIAL_ZANJAS[id] = {};
+    
+    let num = parseFloat(value);
+    if (isNaN(num) || num < 0 || value.trim() === '') {
+        delete HISTORIAL_ZANJAS[id][itemId];
+    } else {
+        if (num > maxMetros) num = maxMetros;
+        HISTORIAL_ZANJAS[id][itemId] = num;
+    }
+    try { await localforage.setItem('HISTORIAL_ZANJAS', HISTORIAL_ZANJAS); } catch (e) { console.error(e); }
+}
+
+function renderDashboardZanjas() {
+    const container = document.getElementById('matrix-container');
+    if (!container) return;
+    
+    const selectEl = document.getElementById('select-arco');
+    const arco = selectEl ? selectEl.value : '';
+    
+    if(!arco || arco.includes('Carga')) {
+        container.innerHTML = '<div style="padding:40px; text-align:center; font-weight:bold; color:#64748b; font-size:16px;">⚠️ Por favor, carga un archivo Excel o selecciona un Arco válido para ver las analíticas.</div>';
+        return;
+    }
+    
+    let zValues = Object.values(PARQUE_ZANJAS).filter(z => z.arco === arco);
+    
+    let totalMetrosProyecto = 0;
+    let metrosPorItem = { excavacion: 0, cama_arena: 0, inspeccion_cables: 0, ruteado_peinado: 0, identificacion_cables: 0, cinta_seguridad: 0, cierre_zanja: 0 };
+    let metrosPorTipo = {}; 
+
+    zValues.forEach(z => {
+        const dx = z.x2 - z.x1; const dy = z.y2 - z.y1;
+        const longitud = Math.sqrt(dx*dx + dy*dy);
+        totalMetrosProyecto += longitud;
+        const type = normalizeZanjaType(z.ref);
+        if (!metrosPorTipo[type]) metrosPorTipo[type] = { total: 0, ejecutado: 0 };
+        metrosPorTipo[type].total += longitud;
+
+        let stats = HISTORIAL_ZANJAS[z.id] || {};
+        if (stats.excavacion) metrosPorItem.excavacion += stats.excavacion;
+        if (stats.cama_arena) metrosPorItem.cama_arena += stats.cama_arena;
+        if (stats.inspeccion_cables) metrosPorItem.inspeccion_cables += stats.inspeccion_cables;
+        if (stats.ruteado_peinado) metrosPorItem.ruteado_peinado += stats.ruteado_peinado;
+        if (stats.identificacion_cables) metrosPorItem.identificacion_cables += stats.identificacion_cables;
+        if (stats.cinta_seguridad) metrosPorItem.cinta_seguridad += stats.cinta_seguridad;
+        if (stats.cierre_zanja) { metrosPorItem.cierre_zanja += stats.cierre_zanja; metrosPorTipo[type].ejecutado += stats.cierre_zanja; }
+    });
+
+    const pctAvanceReal = totalMetrosProyecto > 0 ? ((metrosPorItem.cierre_zanja / totalMetrosProyecto) * 100).toFixed(1) : 0;
+
+    let html = `
+    <h2 style="margin-top:0; color:#1e293b; font-size:18px; border-bottom:2px solid #e2e8f0; padding-bottom:8px;">📊 Cuadro Analítico: Canalizaciones e Hitos de Obra Civil (${arco})</h2>
+    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:15px; margin-bottom:25px; margin-top:15px;">
+        <div style="background:#f8fafc; padding:15px; border-radius:8px; border-left:4px solid #64748b;"><div style="font-size:12px; color:#64748b; font-weight:600;">METROS DISEÑO TOTAL</div><div style="font-size:22px; font-weight:700; color:#1e293b; margin-top:5px;">${Math.round(totalMetrosProyecto).toLocaleString()} m</div></div>
+        <div style="background:#f8fafc; padding:15px; border-radius:8px; border-left:4px solid #ffeb3b;"><div style="font-size:12px; color:#64748b; font-weight:600;">EXCAVACIÓN REALIZADA</div><div style="font-size:22px; font-weight:700; color:#1e293b; margin-top:5px;">${Math.round(metrosPorItem.excavacion).toLocaleString()} m</div></div>
+        <div style="background:#f8fafc; padding:15px; border-radius:8px; border-left:4px solid #4caf50;"><div style="font-size:12px; color:#64748b; font-weight:600;">ZANJA COMPLETADA (HITOS 1-7)</div><div style="font-size:22px; font-weight:700; color:#4caf50; margin-top:5px;">${Math.round(metrosPorItem.cierre_zanja).toLocaleString()} m <span style="font-size:14px; color:#64748b; font-weight:500;">(${pctAvanceReal}%)</span></div></div>
+    </div>
+    <h3 style="color:#334155; font-size:15px; margin-bottom:10px;">📉 Estado Lineal por Fases de Ejecución</h3>
+    <div style="display:flex; flex-direction:column; gap:8px; background:#f8fafc; padding:15px; border-radius:8px; margin-bottom:25px;">
+        ${[{k:'excavacion', l:'⛏️ 1. Excavación'}, {k:'cama_arena', l:'⏳ 2. Cama de arena'}, {k:'inspeccion_cables', l:'🔍 3. Inspección de cables'}, {k:'ruteado_peinado', l:'🔌 4. Ruteado y peinado'}, {k:'identificacion_cables', l:'🏷️ 5. Identificación cables'}, {k:'cinta_seguridad', l:'🎀 6. Cinta seguridad'}, {k:'cierre_zanja', l:'🪨 7. Cierre de zanja'}].map(f => {
+            const m = metrosPorItem[f.k]; const pct = totalMetrosProyecto > 0 ? ((m / totalMetrosProyecto) * 100).toFixed(1) : 0;
+            return `<div style="font-size:13px; font-weight:500; color:#334155;">${f.l}: <strong>${Math.round(m).toLocaleString()} m</strong> (${pct}%)</div><div style="width:100%; background:#e2e8f0; height:12px; border-radius:6px; margin-bottom:8px; overflow:hidden;"><div style="width:${pct}%; background:${f.k==='cierre_zanja'?'#4caf50':'#2196f3'}; height:100%;"></div></div>`;
+        }).join('')}
+    </div>
+    <h3 style="color:#334155; font-size:15px; margin-bottom:10px;">📋 Balance de Producción por Tipo de Circuito</h3>
+    <table style="width:100%; border-collapse:collapse; font-size:13px; text-align:left;">
+        <thead><tr style="background:#e2e8f0; color:#334155;"><th style="padding:10px; border:1px solid #cbd5e1;">Tipo Circuito</th><th style="padding:10px; border:1px solid #cbd5e1;">Diseño Total</th><th style="padding:10px; border:1px solid #cbd5e1;">Completado</th><th style="padding:10px; border:1px solid #cbd5e1;">Pendiente</th><th style="padding:10px; border:1px solid #cbd5e1;">% Listo</th></tr></thead>
+        <tbody>
+            ${Object.keys(metrosPorTipo).sort().map(t => {
+                const item = metrosPorTipo[t]; const pend = Math.max(0, item.total - item.ejecutado); const p = item.total > 0 ? ((item.ejecutado / item.total) * 100).toFixed(1) : 0;
+                return `<tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:10px; font-weight:600; border:1px solid #cbd5e1;">${t}</td><td style="padding:10px; border:1px solid #cbd5e1;">${Math.round(item.total).toLocaleString()} m</td><td style="padding:10px; color:#4caf50; font-weight:600; border:1px solid #cbd5e1;">${Math.round(item.ejecutado).toLocaleString()} m</td><td style="padding:10px; color:#ef4444; border:1px solid #cbd5e1;">${Math.round(pend).toLocaleString()} m</td><td style="padding:10px; font-weight:600; border:1px solid #cbd5e1;">${p}%</td></tr>`;
+            }).join('')}
+        </tbody>
+    </table>`;
+    container.innerHTML = html;
+}
+
+function renderDashboardPuntuales() {
+    const container = document.getElementById('matrix-container');
+    if (!container) return;
+    
+    const selectEl = document.getElementById('select-arco');
+    const arco = selectEl ? selectEl.value : '';
+    
+    if(!arco || arco.includes('Carga')) {
+        container.innerHTML = '<div style="padding:40px; text-align:center; font-weight:bold; color:#64748b; font-size:16px;">⚠️ Por favor, carga un archivo Excel o selecciona un Arco válido para ver las analíticas.</div>';
+        return;
+    }
+    
+    let pValues = Object.values(PARQUE_PUNTUALES).filter(p => p.arco === arco);
+    
+    let totalEquipos = pValues.length;
+    let resumenTipos = {};
+
+    pValues.forEach(p => {
+        const refUp = p.ref.toUpperCase();
+        let typeKey = 'otras'; let label = 'Otros Elementos'; let maxChecks = 6;
+        if (refUp.includes('ARQUETA')) { typeKey = 'arqueta'; label = '📥 Arquetas Registro'; maxChecks = 6; } 
+        else if (refUp.includes('POSTE CAJA')) { typeKey = 'csb'; label = '📦 Postes Caja (CSB)'; maxChecks = 7; }
+        else if (refUp.includes('BÁCULO-CCTV') || refUp.includes('BACULO-CCTV') || refUp.includes('CCTV') || refUp.includes('FC-')) { typeKey = 'cctv'; label = '🎥 Báculos CCTV'; maxChecks = 6; }
+        else if (refUp.includes('GATEWAY')) { typeKey = 'gateway'; label = '📡 Gateways'; maxChecks = 7; }
+        else if (refUp.includes('MBOX')) { typeKey = 'mbox'; label = '⚡ Cajas MBox'; maxChecks = 7; }
+        else if (refUp.includes('TBOX')) { typeKey = 'tbox'; label = '🔋 Cajas TBox'; maxChecks = 7; }
+        else if (refUp.includes('METEO')) { typeKey = 'meteo'; label = '🌤️ Estaciones Meteo'; maxChecks = 6; }
+
+        if (!resumenTipos[typeKey]) resumenTipos[typeKey] = { label: label, total: 0, sin_empezar: 0, en_proceso: 0, terminados: 0, maxC: maxChecks };
+        resumenTipos[typeKey].total++;
+        let checks = HISTORIAL_PUNTUALES[p.id] || {};
+        let count = 0;
+        Object.keys(checks).forEach(k => { if(checks[k]) count++; });
+        if (count === 0) resumenTipos[typeKey].sin_empezar++;
+        else if (count === maxChecks) resumenTipos[typeKey].terminados++;
+        else resumenTipos[typeKey].en_proceso++;
+    });
+
+    let tSin = 0, tPro = 0, tTer = 0;
+    Object.values(resumenTipos).forEach(r => { tSin += r.sin_empezar; tPro += r.en_proceso; tTer += r.terminados; });
+    const pctGral = totalEquipos > 0 ? ((tTer / totalEquipos) * 100).toFixed(1) : 0;
+
+    let html = `
+    <h2 style="margin-top:0; color:#1e293b; font-size:18px; border-bottom:2px solid #e2e8f0; padding-bottom:8px;">📊 Cuadro Analítico: Equipamiento e Instalaciones Puntuales (${arco})</h2>
+    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:15px; margin-bottom:25px; margin-top:15px;">
+        <div style="background:#f8fafc; padding:15px; border-radius:8px; border-left:4px solid #64748b;"><div style="font-size:12px; color:#64748b;">TOTAL EQUIPOS RED</div><div style="font-size:22px; font-weight:700; color:#1e293b; margin-top:5px;">${totalEquipos} uds</div></div>
+        <div style="background:#fff5f5; padding:15px; border-radius:8px; border-left:4px solid #ef4444;"><div style="font-size:12px; color:#991b1b;">PENDIENTES</div><div style="font-size:22px; font-weight:700; color:#b91c1c; margin-top:5px;">${tSin} uds</div></div>
+        <div style="background:#fffbeb; padding:15px; border-radius:8px; border-left:4px solid #f59e0b;"><div style="font-size:12px; color:#92400e;">EN MONTAJE / AJUSTE</div><div style="font-size:22px; font-weight:700; color:#b45309; margin-top:5px;">${tPro} uds</div></div>
+        <div style="background:#f0fdf4; padding:15px; border-radius:8px; border-left:4px solid #4caf50;"><div style="font-size:12px; color:#166534;">INSTALADOS AL 100%</div><div style="font-size:22px; font-weight:700; color:#166534; margin-top:5px;">${tTer} uds <span style="font-size:14px; color:#64748b;">(${pctGral}%)</span></div></div>
+    </div>
+    <h3 style="color:#334155; font-size:15px; margin-bottom:10px;">📋 Estado de Montaje por Tipo de Equipamiento</h3>
+    <table style="width:100%; border-collapse:collapse; font-size:13px; text-align:left;">
+        <thead><tr style="background:#e2e8f0; color:#334155;"><th style="padding:10px; border:1px solid #cbd5e1;">Descripción Elemento</th><th style="padding:10px; border:1px solid #cbd5e1; text-align:center;">Total</th><th style="padding:10px; border:1px solid #cbd5e1; text-align:center; color:#b91c1c;">Sin Empezar</th><th style="padding:10px; border:1px solid #cbd5e1; text-align:center; color:#b45309;">En Proceso</th><th style="padding:10px; border:1px solid #cbd5e1; text-align:center; color:#166534;">Terminado</th><th style="padding:10px; border:1px solid #cbd5e1; text-align:center;">% Listo</th></tr></thead>
+        <tbody>
+            ${Object.keys(resumenTipos).sort().map(k => {
+                const r = resumenTipos[k]; const pOk = r.total > 0 ? ((r.terminados / r.total) * 100).toFixed(0) : 0;
+                return `<tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:10px; font-weight:600; border:1px solid #cbd5e1;">${r.label}</td><td style="padding:10px; text-align:center; font-weight:600; border:1px solid #cbd5e1;">${r.total}</td><td style="padding:10px; text-align:center; border:1px solid #cbd5e1; color:#64748b;">${r.sin_empezar}</td><td style="padding:10px; text-align:center; border:1px solid #cbd5e1; color:#b45309;">${r.en_proceso}</td><td style="padding:10px; text-align:center; border:1px solid #cbd5e1; color:#4caf50; font-weight:700;">${r.terminados}</td><td style="padding:10px; text-align:center; font-weight:700; border:1px solid #cbd5e1; background:#f8fafc;">${pOk}%</td></tr>`;
+            }).join('')}
+        </tbody>
+    </table>`;
+    container.innerHTML = html;
+}
