@@ -60,8 +60,6 @@ select, input { padding: 8px; border-radius: 5px; border: 1px solid #cbd5e1; fon
 .nav-container { display: flex; gap: 10px; align-items: center; }
 .btn-nav-outline { background: #ffffff; color: var(--blue); border: 2px solid var(--blue); padding: 8px 15px; border-radius: 6px; font-weight: bold; cursor: pointer; text-decoration: none; font-size: 13px; transition: all 0.2s; }
 .btn-nav-outline:hover { background: #f0f7ff; transform: translateY(-1px); }
-.btn-nav-outline-danger { background: #ffffff; color: #dc2626; border: 2px solid #dc2626; padding: 8px 15px; border-radius: 6px; font-weight: bold; cursor: pointer; text-decoration: none; font-size: 13px; transition: all 0.2s; }
-.btn-nav-outline-danger:hover { background: #fef2f2; transform: translateY(-1px); }
 .btn-nav-white { background: #ffffff; color: #333; border: 1px solid #ccc; padding: 8px 15px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 13px; }
 /* --- ESTILO PARA ESTACIONES DE POTENCIA --- */
 .power-station {

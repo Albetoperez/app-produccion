@@ -23,12 +23,9 @@ let zaLayerState = {
     puntual: { 'arqueta': true, 'gateway': true, 'mbox': true, 'tbox': true, 'meteo': true, 'csb': true, 'cctv': true } 
 };
 
-localforage.config({ name: 'SIGMA_PROD_V1', storeName: 'produccion_hincas' }).catch(() => {
-    console.warn('IndexedDB no disponible, usando localStorage como fallback');
-    localforage.setDriver(localforage.LOCALSTORAGE);
-});
+localforage.config({ name: 'SIGMA_PROD_V1', storeName: 'produccion_hincas' });
 
-// LEVELS now defined in shared.js
+const LEVELS = ['H', 'P', 'T', 'O', 'M'];
 
 const CHECKLIST_PUNTUALES = {
     'arqueta': [
@@ -578,6 +575,7 @@ function renderMatrixZanjas() {
         
         let svgHtml = `<svg style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:10;">`;
         
+        let zanjaMetrosTotal = 0;
         let metrosPorTipo = { 'MT': 0, 'BT': 0, 'SSAA': 0, 'PAT': 0, 'CCTV': 0, 'ENTRADA_PS': 0 };
         
         zValues.forEach(z => {
@@ -588,6 +586,7 @@ function renderMatrixZanjas() {
             metrosPorTipo[type] = (metrosPorTipo[type] || 0) + longitud;
             if (!zaLayerState.zanja[type]) return;
             
+            zanjaMetrosTotal += longitud;
 
             const pxX1 = ((z.x1 - gMinX) * baseScaleX) + MARGIN; const pxY1 = ((gMaxY - z.y1) * baseScaleY) + MARGIN;
             const pxX2 = ((z.x2 - gMinX) * baseScaleX) + MARGIN; const pxY2 = ((gMaxY - z.y2) * baseScaleY) + MARGIN;
