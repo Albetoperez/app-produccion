@@ -27,7 +27,7 @@
         .dash-card h3 { margin: 0 0 15px 0; color: #1e293b; font-size: 14px; font-weight: 700; border-bottom: 1px solid #e8edf4; padding-bottom: 10px; }
         .dash-card:not(.tab-panel) { box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
 
-        .scb-kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 20px; }
+
         .kpi-box { padding: 18px; border-radius: 6px; background: #fff; border: 1px solid #e8edf4; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
         .kpi-box h4 { margin: 0 0 8px 0; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; }
 
@@ -63,7 +63,7 @@
             <h2 style="margin: 0; color: #1e293b; font-size: 18px; white-space: nowrap;"><i class="fa-solid fa-chart-pie" style="color: #005596;"></i> Cuadro de Mando</h2>
             <div class="tab-menu">
                 <button id="tab-mecanica" class="dash-tab active" onclick="switchTabDash('mecanica')">Prod. Mecánica</button>
-                <button id="tab-electrica" class="dash-tab" onclick="switchTabDash('electrica')">Prod. Eléctrica / SCB</button>
+                <button id="tab-electrica" class="dash-tab" onclick="switchTabDash('electrica')">Cajas SCB</button>
                 <button id="tab-zanjas" class="dash-tab" onclick="switchTabDash('zanjas')">Obra Civil (Zanjas)</button>
                 <button id="tab-puntuales" class="dash-tab" onclick="switchTabDash('puntuales')">Equipos Puntuales</button>
             </div>
@@ -120,21 +120,6 @@
         </div>
 
         <div id="panel-electrica" class="tab-panel" style="display: none;">
-            <div class="scb-kpis">
-                <div class="kpi-box" style="border-left: 4px solid #dc2626;">
-                    <h4 style="color:#b91c1c">Sin Comenzar</h4>
-                    <p id="kpi-scb-red" style="color:#dc2626; font-size: 24px; font-weight: 800; margin: 0;">0</p>
-                </div>
-                <div class="kpi-box" style="border-left: 4px solid #f97316;">
-                    <h4 style="color:#c2410c">En Proceso</h4>
-                    <p id="kpi-scb-orange" style="color:#ea580c; font-size: 24px; font-weight: 800; margin: 0;">0</p>
-                </div>
-                <div class="kpi-box" style="border-left: 4px solid #16a34a;">
-                    <h4 style="color:#15803d">Finalizadas</h4>
-                    <p id="kpi-scb-green" style="color:#16a34a; font-size: 24px; font-weight: 800; margin: 0;">0</p>
-                </div>
-            </div>
-
             <div class="dash-grid">
                 <div class="dash-card" style="height: 360px;">
                     <h3>Checklist: Tareas Completadas</h3>
