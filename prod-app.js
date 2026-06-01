@@ -249,9 +249,12 @@ function procesarDatosJSON(data, fileArco) {
             const ref = row['REFERENCIA'] || row['REFERENCIA (LINEAL)'] || row['TIPO'] || row['CAPA'] || 'ZANJA';
             
             if (x1 !== 0 && y1 !== 0 && x2 !== 0 && y2 !== 0) {
+                const zArcoCol = row['ARCO'] || '';
+                const zArcoRef = detectarArco(ref);
+                const zArco = zArcoCol || (zArcoRef !== 'S/A' ? zArcoRef : arcoEnEsteArchivo);
                 const safeRef = String(ref).replace(/[\.\-\s]/g, '_'); 
-                const zId = `Z_${x1}_${y1}_${x2}_${y2}_${safeRef}_${arcoEnEsteArchivo}`;
-                PARQUE_ZANJAS[zId] = { id: zId, ref: ref, x1: x1, y1: y1, x2: x2, y2: y2, arco: arcoEnEsteArchivo };
+                const zId = `Z_${x1}_${y1}_${x2}_${y2}_${safeRef}_${zArco}`;
+                PARQUE_ZANJAS[zId] = { id: zId, ref: ref, x1: x1, y1: y1, x2: x2, y2: y2, arco: zArco };
             }
             return; 
         }
@@ -633,7 +636,7 @@ function renderMatrixZanjas() {
         let svgHtml = `<svg style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:10;">`;
         
         let zanjaMetrosTotal = 0;
-        let metrosPorTipo = { 'MT': 0, 'BT': 0, 'SSAA': 0, 'PAT': 0, 'CCTV': 0, 'ENTRADA_PS': 0 };
+        let metrosPorTipo = { 'MT': 0, 'BT': 0, 'SSAA': 0, 'PAT': 0, 'CCTV': 0, 'ENTRADA_PS': 0, 'OTRAS': 0 };
         
         zValues.forEach(z => {
             const dx = z.x2 - z.x1; const dy = z.y2 - z.y1;
