@@ -305,17 +305,18 @@ function procesarMecanica(arcoSeleccionado, enRango, tareaCurva) {
         arcosKeys.forEach(ar => {
             const isHidden = (arcoSeleccionado === 'TODOS') ? 'hidden' : '';
             const iconCls = isHidden ? 'fa-chevron-down' : 'fa-chevron-up';
-            accordionHtml += `<div class="accordion-header" onclick="toggleAccordion(this)"><span><i class="fa-solid fa-bolt" style="color: #005596;"></i> ${ar}</span><i class="fa-solid ${iconCls}" style="font-size: 12px; color: #94a3b8;"></i></div><div class="accordion-content ${isHidden}" style="margin-bottom: 15px; padding: 5px 0;">`;
+            accordionHtml += `<div class="accordion-header" onclick="toggleAccordion(this)"><span><i class="fa-solid fa-bolt" style="color: #005596;"></i> ${ar}</span><i class="fa-solid ${iconCls}" style="font-size: 12px; color: #94a3b8;"></i></div><div class="accordion-content ${isHidden}">`;
+            accordionHtml += `<div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:15px;">`;
             Object.values(bloquesData[ar]).sort((a,b) => a.name.localeCompare(b.name)).forEach(bl => {
                 const bPctH = bl.tH ? ((bl.cH / bl.tH) * 100).toFixed(0) : 0, bPctP = bl.tH ? ((bl.cP / bl.tH) * 100).toFixed(0) : 0, bPctT = bl.tF ? ((bl.cT / bl.tF) * 100).toFixed(0) : 0, bPctO = bl.tF ? ((bl.cO / bl.tF) * 100).toFixed(0) : 0, bPctM = bl.tF ? ((bl.cM / bl.tF) * 100).toFixed(0) : 0;
-                accordionHtml += `<div style="background: #fafbfc; border: 1px solid #e8edf4; border-radius: 4px; padding: 12px; margin-bottom: 8px;"><div style="font-weight: 700; color: #005596; font-size: 13px; margin-bottom: 10px;">${bl.name}</div><div style="display: flex; flex-direction: column; gap: 5px;">
-                    <div><div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; color: #475569; margin-bottom: 2px;"><span>Hincas</span><span>${bl.cH}/${bl.tH}</span></div><div style="width: 100%; background: #e8edf4; height: 6px; border-radius: 3px; overflow: hidden;"><div style="background:#ffb300; width:${bPctH}%; height: 100%; border-radius: 3px;"></div></div></div>
-                    <div><div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; color: #475569; margin-bottom: 2px;"><span>Piruletas</span><span>${bl.cP}/${bl.tH}</span></div><div style="width: 100%; background: #e8edf4; height: 6px; border-radius: 3px; overflow: hidden;"><div style="background:#2196f3; width:${bPctP}%; height: 100%; border-radius: 3px;"></div></div></div>
-                    <div><div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; color: #475569; margin-bottom: 2px;"><span>Torquetubes</span><span>${bl.cT}/${bl.tF}</span></div><div style="width: 100%; background: #e8edf4; height: 6px; border-radius: 3px; overflow: hidden;"><div style="background:#9c27b0; width:${bPctT}%; height: 100%; border-radius: 3px;"></div></div></div>
-                    <div><div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; color: #475569; margin-bottom: 2px;"><span>Omegas</span><span>${bl.cO}/${bl.tF}</span></div><div style="width: 100%; background: #e8edf4; height: 6px; border-radius: 3px; overflow: hidden;"><div style="background:#00bcd4; width:${bPctO}%; height: 100%; border-radius: 3px;"></div></div></div>
-                    <div><div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; color: #475569; margin-bottom: 2px;"><span>Módulos</span><span>${bl.cM}/${bl.tF}</span></div><div style="width: 100%; background: #e8edf4; height: 6px; border-radius: 3px; overflow: hidden;"><div style="background:#4caf50; width:${bPctM}%; height: 100%; border-radius: 3px;"></div></div></div></div></div>`;
+                accordionHtml += `<div style="background:#fafbfc; border:1px solid #e8edf4; border-radius:4px; padding:10px; width:calc(33.33% - 6px); min-width:200px; box-sizing:border-box;"><div style="font-weight:700; color:#005596; font-size:12px; margin-bottom:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${bl.name}</div><div style="display:flex; flex-direction:column; gap:3px;">
+                    <div style="display:flex; align-items:center; gap:6px; font-size:11px;"><span style="color:#ffb300; font-weight:700; width:12px;">H</span><div style="flex:1; background:#e8edf4; height:4px; border-radius:2px; overflow:hidden;"><div style="background:#ffb300; width:${bPctH}%; height:100%; border-radius:2px;"></div></div><span style="color:#475569; font-weight:600; white-space:nowrap;">${bl.cH}/${bl.tH}</span></div>
+                    <div style="display:flex; align-items:center; gap:6px; font-size:11px;"><span style="color:#2196f3; font-weight:700; width:12px;">P</span><div style="flex:1; background:#e8edf4; height:4px; border-radius:2px; overflow:hidden;"><div style="background:#2196f3; width:${bPctP}%; height:100%; border-radius:2px;"></div></div><span style="color:#475569; font-weight:600; white-space:nowrap;">${bl.cP}/${bl.tH}</span></div>
+                    <div style="display:flex; align-items:center; gap:6px; font-size:11px;"><span style="color:#9c27b0; font-weight:700; width:12px;">T</span><div style="flex:1; background:#e8edf4; height:4px; border-radius:2px; overflow:hidden;"><div style="background:#9c27b0; width:${bPctT}%; height:100%; border-radius:2px;"></div></div><span style="color:#475569; font-weight:600; white-space:nowrap;">${bl.cT}/${bl.tF}</span></div>
+                    <div style="display:flex; align-items:center; gap:6px; font-size:11px;"><span style="color:#00bcd4; font-weight:700; width:12px;">O</span><div style="flex:1; background:#e8edf4; height:4px; border-radius:2px; overflow:hidden;"><div style="background:#00bcd4; width:${bPctO}%; height:100%; border-radius:2px;"></div></div><span style="color:#475569; font-weight:600; white-space:nowrap;">${bl.cO}/${bl.tF}</span></div>
+                    <div style="display:flex; align-items:center; gap:6px; font-size:11px;"><span style="color:#4caf50; font-weight:700; width:12px;">M</span><div style="flex:1; background:#e8edf4; height:4px; border-radius:2px; overflow:hidden;"><div style="background:#4caf50; width:${bPctM}%; height:100%; border-radius:2px;"></div></div><span style="color:#475569; font-weight:600; white-space:nowrap;">${bl.cM}/${bl.tF}</span></div></div></div>`;
             });
-            accordionHtml += `</div>`;
+            accordionHtml += `</div></div>`;
         });
     }
     if(document.getElementById('blocks-accordion-container')) document.getElementById('blocks-accordion-container').innerHTML = accordionHtml;
@@ -422,18 +423,21 @@ function procesarSCB(arcoSeleccionado, enRango) {
         scbArcosKeys.forEach(ar => {
             const isHidden = (arcoSeleccionado === 'TODOS') ? 'hidden' : '';
             const iconCls = isHidden ? 'fa-chevron-down' : 'fa-chevron-up';
-            scbAccordionHtml += `<div class="accordion-header" onclick="toggleAccordion(this)"><span><i class="fa-solid fa-bolt" style="color: #005596;"></i> ${ar}</span><i class="fa-solid ${iconCls}" style="font-size: 12px; color: #94a3b8;"></i></div><div class="accordion-content ${isHidden}" style="margin-bottom: 15px; padding: 5px 0;">`;
+            scbAccordionHtml += `<div class="accordion-header" onclick="toggleAccordion(this)"><span><i class="fa-solid fa-bolt" style="color: #005596;"></i> ${ar}</span><i class="fa-solid ${iconCls}" style="font-size: 12px; color: #94a3b8;"></i></div><div class="accordion-content ${isHidden}">`;
+            scbAccordionHtml += `<div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:15px;">`;
             Object.values(scbBloquesData[ar]).sort((a,b) => a.name.localeCompare(b.name)).forEach(bl => {
                 const bPctG = bl.t ? ((bl.g / bl.t) * 100).toFixed(0) : 0;
-                scbAccordionHtml += `<div style="background: #fafbfc; border: 1px solid #e8edf4; border-radius: 4px; padding: 12px; margin-bottom: 8px;"><div style="font-weight: 700; color: #005596; font-size: 13px; margin-bottom: 10px; display: flex; justify-content: space-between;">${bl.name} <span style="font-size:12px; color:#16a34a;">${bPctG}%</span></div>
-                    <div style="display:flex; height:8px; border-radius:4px; overflow:hidden; margin-bottom:8px; background:#e8edf4;">
-                        <div style="background:#dc2626; width:${(bl.r/bl.t)*100}%" title="Sin Empezar: ${bl.r}"></div>
-                        <div style="background:#f97316; width:${(bl.o/bl.t)*100}%" title="En Proceso: ${bl.o}"></div>
-                        <div style="background:#16a34a; width:${(bl.g/bl.t)*100}%" title="Finalizada: ${bl.g}"></div></div>
-                    <div style="display:flex; justify-content:space-between; font-size:11px; font-weight:600; color:#475569;">
+                const bPctR = bl.t ? ((bl.r / bl.t) * 100) : 0;
+                const bPctO = bl.t ? ((bl.o / bl.t) * 100) : 0;
+                scbAccordionHtml += `<div style="background:#fafbfc; border:1px solid #e8edf4; border-radius:4px; padding:10px; width:calc(33.33% - 6px); min-width:200px; box-sizing:border-box;"><div style="font-weight:700; color:#005596; font-size:12px; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center;"><span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${bl.name}</span><span style="font-size:11px; color:#16a34a; font-weight:700;">${bPctG}%</span></div>
+                    <div style="display:flex; height:6px; border-radius:3px; overflow:hidden; margin-bottom:5px; background:#e8edf4;">
+                        <div style="background:#dc2626; width:${bPctR}%;"></div>
+                        <div style="background:#f97316; width:${bPctO}%;"></div>
+                        <div style="background:#16a34a; width:${bPctG}%;"></div></div>
+                    <div style="display:flex; justify-content:space-between; font-size:10px; font-weight:600; color:#475569;">
                         <span style="color:#dc2626">${bl.r} pend.</span><span style="color:#f97316">${bl.o} proc.</span><span style="color:#16a34a">${bl.g} ok</span></div></div>`;
             });
-            scbAccordionHtml += `</div>`;
+            scbAccordionHtml += `</div></div>`;
         });
     }
     if(document.getElementById('blocks-accordion-scb')) document.getElementById('blocks-accordion-scb').innerHTML = scbAccordionHtml;
@@ -472,16 +476,7 @@ function procesarZanjas(arcoSeleccionado) {
         if (stats.cierre_zanja) { metrosPorItem.cierre_zanja += stats.cierre_zanja; metrosPorTipo[type].ejecutado += stats.cierre_zanja; }
     });
 
-    const pctAvanceReal = totalMetrosProyecto > 0 ? ((metrosPorItem.cierre_zanja / totalMetrosProyecto) * 100).toFixed(1) : 0;
-
     containerZanjas.innerHTML = `
-        <h3 style="margin: 0 0 20px 0; color: #1e293b; font-size: 14px; font-weight: 700;">Obra Civil - Resumen</h3>
-        <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:15px; margin-bottom:25px;">
-            <div class="stat-card"><div class="stat-label">Metros Diseño Total</div><div class="stat-value">${Math.round(totalMetrosProyecto).toLocaleString()} <span style="font-size:14px; font-weight:600;">m</span></div></div>
-            <div class="stat-card"><div class="stat-label">Excavación Realizada</div><div class="stat-value">${Math.round(metrosPorItem.excavacion).toLocaleString()} <span style="font-size:14px; font-weight:600;">m</span></div></div>
-            <div class="stat-card" style="border-left: 4px solid #16a34a;"><div class="stat-label" style="color:#15803d;">Zanja Completada</div><div class="stat-value" style="color:#16a34a;">${Math.round(metrosPorItem.cierre_zanja).toLocaleString()} <span style="font-size:14px; font-weight:600;">m</span> <span style="font-size:13px; opacity:0.8;">(${pctAvanceReal}%)</span></div></div>
-        </div>
-        
         <h3 style="margin: 0 0 15px 0; color: #1e293b; font-size: 14px; font-weight: 700;">Avance por Fases Constructivas</h3>
         <div style="margin-bottom:25px;">
             ${[{k:'excavacion', l:'1. Excavación', i:'fa-solid fa-digging'}, {k:'cama_arena', l:'2. Cama de arena', i:'fa-regular fa-circle'}, {k:'inspeccion_cables', l:'3. Inspección de cables', i:'fa-solid fa-magnifying-glass'}, {k:'ruteado_peinado', l:'4. Ruteado y peinado', i:'fa-solid fa-cable-car'}, {k:'identificacion_cables', l:'5. Identificación cables', i:'fa-solid fa-tag'}, {k:'cinta_seguridad', l:'6. Cinta seguridad', i:'fa-solid fa-tape'}, {k:'cierre_zanja', l:'7. Cierre de zanja', i:'fa-solid fa-check'}].map(f => {
@@ -514,7 +509,6 @@ function procesarPuntuales(arcoSeleccionado) {
         return;
     }
 
-    let totalEquipos = pValues.length;
     let resumenTipos = {};
 
     pValues.forEach(p => {
@@ -540,19 +534,7 @@ function procesarPuntuales(arcoSeleccionado) {
         else resumenTipos[typeKey].en_proceso++;
     });
 
-    let tSin = 0, tPro = 0, tTer = 0;
-    Object.values(resumenTipos).forEach(r => { tSin += r.sin_empezar; tPro += r.en_proceso; tTer += r.terminados; });
-    const pctGral = totalEquipos > 0 ? ((tTer / totalEquipos) * 100).toFixed(1) : 0;
-
     containerPuntuales.innerHTML = `
-        <h3 style="margin: 0 0 20px 0; color: #1e293b; font-size: 14px; font-weight: 700;">Equipos Puntuales - Resumen</h3>
-        <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:15px; margin-bottom:25px;">
-            <div class="stat-card"><div class="stat-label">Total Equipos Red</div><div class="stat-value">${totalEquipos} <span style="font-size:14px; font-weight:600;">uds</span></div></div>
-            <div class="stat-card" style="border-left: 4px solid #dc2626;"><div class="stat-label" style="color:#b91c1c;">Pendientes</div><div class="stat-value" style="color:#dc2626;">${tSin} <span style="font-size:14px; font-weight:600;">uds</span></div></div>
-            <div class="stat-card" style="border-left: 4px solid #f97316;"><div class="stat-label" style="color:#c2410c;">En Montaje / Ajuste</div><div class="stat-value" style="color:#ea580c;">${tPro} <span style="font-size:14px; font-weight:600;">uds</span></div></div>
-            <div class="stat-card" style="border-left: 4px solid #16a34a;"><div class="stat-label" style="color:#15803d;">Instalados al 100%</div><div class="stat-value" style="color:#16a34a;">${tTer} <span style="font-size:14px; font-weight:600;">uds</span> <span style="font-size:13px; opacity:0.8;">(${pctGral}%)</span></div></div>
-        </div>
-        
         <h3 style="margin: 0 0 15px 0; color: #1e293b; font-size: 14px; font-weight: 700;">Progreso por Tipo de Equipamiento</h3>
         <table class="dash-table">
             <thead><tr><th>Descripción</th><th style="text-align:center;">Total</th><th style="text-align:center;">Sin Empezar</th><th style="text-align:center;">En Proceso</th><th style="text-align:center;">Terminado</th><th style="text-align:center;">Avance</th></tr></thead>
