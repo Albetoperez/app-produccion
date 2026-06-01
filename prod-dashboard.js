@@ -220,7 +220,7 @@ function procesarMecanica(arcoSeleccionado, enRango, tareaCurva) {
             }
 
             if (minLvlFila >= 3 && datesT.length === f.hincas) {
-                let maxDateT = datesT.sort().reverse()[0];
+                let maxDateT = datesT.reduce((a,b) => a > b ? a : b);
                 if (enRango(maxDateT)) {
                     cTorque++; bloquesData[ar][bKey].cT++;
                     if (!produccionDiaria[maxDateT]) produccionDiaria[maxDateT] = {H:0,P:0,T:0,O:0,M:0};
@@ -230,7 +230,7 @@ function procesarMecanica(arcoSeleccionado, enRango, tareaCurva) {
             }
 
             if (minLvlFila >= 4 && datesO.length === f.hincas) {
-                let maxDateO = datesO.sort().reverse()[0];
+                let maxDateO = datesO.reduce((a,b) => a > b ? a : b);
                 if (enRango(maxDateO)) {
                     cOmegas++; bloquesData[ar][bKey].cO++;
                     if (!produccionDiaria[maxDateO]) produccionDiaria[maxDateO] = {H:0,P:0,T:0,O:0,M:0};
@@ -240,7 +240,7 @@ function procesarMecanica(arcoSeleccionado, enRango, tareaCurva) {
             }
 
             if (minLvlFila >= 5 && datesM.length === f.hincas) {
-                let maxDateM = datesM.sort().reverse()[0];
+                let maxDateM = datesM.reduce((a,b) => a > b ? a : b);
                 if (enRango(maxDateM)) {
                     cModulos++; bloquesData[ar][bKey].cM++;
                     if (!produccionDiaria[maxDateM]) produccionDiaria[maxDateM] = {H:0,P:0,T:0,O:0,M:0};

@@ -6,7 +6,8 @@
     --gemela: #3498db; 
 }
 
-body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; background: #f0f3f7; user-select: none; overflow: hidden; }
+body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; background: #f0f3f7; user-select: none; }
+body:not(.dashboard-mode) { overflow: hidden; }
 
 header { background: var(--blue); color: white; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
 .logo-area { display: flex; align-items: center; gap: 15px; }

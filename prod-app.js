@@ -16,6 +16,7 @@ let _currentPuntual = null;
 let pzScale = 1;
 let pzPointX = 0;
 let pzPointY = 0;
+let pzCurrentArco = null;
 
 let zaPanelCollapsed = false;
 let zaLayerState = {
@@ -70,6 +71,10 @@ function escapeHtml(str) {
 function escapeJsStr(str) { 
     if (!str) return '';
     return String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"').replace(/</g, '\\x3C').replace(/>/g, '\\x3E').replace(/\n/g, '\\n'); 
+}
+function safeHtmlId(str) { 
+    if (!str) return '';
+    return String(str).replace(/[^a-zA-Z0-9-_:]/g, '_');
 }
 
 function setTask(task, el) {
@@ -372,6 +377,11 @@ async function renderMatrix() {
         psIds.forEach(id => { const ps = PARQUE_ESTACIONES[id]; if(ps.minX < gMinX) gMinX = ps.minX; if(ps.maxX > gMaxX) gMaxX = ps.maxX; if(ps.minY < gMinY) gMinY = ps.minY; if(ps.maxY > gMaxY) gMaxY = ps.maxY; });
         sbIds.forEach(id => { const sb = PARQUE_CAJAS[id]; if(sb.minX < gMinX) gMinX = sb.minX; if(sb.maxX > gMaxX) gMaxX = sb.maxX; if(sb.minY < gMinY) gMinY = sb.minY; if(sb.maxY > gMaxY) gMaxY = sb.maxY; });
 
+        if (gMinX === Infinity) gMinX = 0;
+        if (gMaxX === -Infinity) gMaxX = 1;
+        if (gMinY === Infinity) gMinY = 0;
+        if (gMaxY === -Infinity) gMaxY = 1;
+
         const rX = (gMaxX - gMinX) || 1; const rY = (gMaxY - gMinY) || 1;
         const SCALE_X = 8, SCALE_Y = 6;
         
@@ -402,7 +412,8 @@ async function renderMatrix() {
             let colorClass = 'sb-red'; if(count === 6) colorClass = 'sb-green'; else if(count > 0) colorClass = 'sb-orange';
             const numCaja = sb.name.split('-').slice(2).join('-').split('_')[0];
             const safeId = escapeJsStr(id);
-            html += `<div id="sb-${safeId}" class="string-box ${colorClass}" style="position: absolute; left: ${pxX}px; top: ${pxY}px; width: ${wS}px; height: ${pxH}px;" title="Ver Checklist" onclick="abrirModalCaja('${safeId}')"><span>${escapeHtml(numCaja)}</span></div>`;
+            const htmlSbId = safeHtmlId(id);
+            html += `<div id="sb-${htmlSbId}" class="string-box ${colorClass}" style="position: absolute; left: ${pxX}px; top: ${pxY}px; width: ${wS}px; height: ${pxH}px;" title="Ver Checklist" onclick="abrirModalCaja('${safeId}')"><span>${escapeHtml(numCaja)}</span></div>`;
         }
 
         for (let id of ids) {
@@ -425,9 +436,10 @@ async function renderMatrix() {
                 for (let h = 1; h <= f.hincas; h++) {
                     const hId = `${id}-F${fN}-H${h}`;
                     const safeHId = escapeJsStr(hId);
+                    const htmlHId = safeHtmlId(hId);
                     const rawData = HISTORIAL_PROD[hId];
                     const s = (rawData && typeof rawData === 'object') ? (rawData.estado || '') : (rawData || '');
-                    html += `<div class="cell" id="${safeHId}" onclick="paint('${safeHId}')" style="background-color:${getStyleByStatus(s)}; color: ${s==='' ? 'transparent' : '#333'};">${s}</div>`;
+                    html += `<div class="cell" id="${htmlHId}" onclick="paint('${safeHId}')" style="background-color:${getStyleByStatus(s)}; color: ${s==='' ? 'transparent' : '#333'};">${s}</div>`;
                 }
                 html += `</div></div>`;
             }
@@ -576,18 +588,25 @@ function renderMatrixZanjas() {
             if(p.y < gMinY) gMinY = p.y; if(p.y > gMaxY) gMaxY = p.y;
         });
 
+        if (gMinX === Infinity) gMinX = 0;
+        if (gMaxX === -Infinity) gMaxX = 1;
+        if (gMinY === Infinity) gMinY = 0;
+        if (gMaxY === -Infinity) gMaxY = 1;
+
         const baseScaleX = 4, baseScaleY = 3, MARGIN = 100; 
         const rX = (gMaxX - gMinX) || 1; const rY = (gMaxY - gMinY) || 1;
         const canvasWidth = (rX * baseScaleX) + (MARGIN * 2);
         const canvasHeight = (rY * baseScaleY) + (MARGIN * 2);
 
-        if (pzScale === 1 && pzPointX === 0 && pzPointY === 0) {
+        if (pzCurrentArco !== arco) {
+            pzScale = 1;
             const cw = container.clientWidth || 1000;
             const ch = 500; 
             pzPointX = (cw - canvasWidth) / 2;
             pzPointY = (ch - canvasHeight) / 2;
             if (pzPointX < 0) pzPointX = 50; 
             if (pzPointY < 0) pzPointY = 50;
+            pzCurrentArco = arco;
         }
         
         let html = `<div id="zanjas-viewport" style="width: 100%; height: 70vh; min-height: 500px; overflow: hidden; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; position: relative; margin-top: 10px; cursor: grab;">`;
@@ -644,6 +663,7 @@ function renderMatrixZanjas() {
             const c = '#000000'; 
             const sw = 2; 
             const pIdSafe = escapeJsStr(p.id);
+            const htmlPId = safeHtmlId(p.id);
             let checks = HISTORIAL_PUNTUALES[p.id] || {};
             
             if (refUp.includes('ARQUETA')) {
@@ -654,7 +674,7 @@ function renderMatrixZanjas() {
                 let count = contarChecksPuntual(checks, 'arqueta');
                 let fillCol = getColorPuntual(count, 6);
 
-                svgHtml += `<rect id="pt-${pIdSafe}" x="${pxX - s/2}" y="${pxY - s/2}" width="${s}" height="${s}" fill="${fillCol}" stroke="${c}" stroke-width="${sw}" style="pointer-events:auto; cursor:pointer;" onclick="abrirModalPuntual('${pIdSafe}', 'arqueta', '${escapeJsStr(p.ref)}')"></rect>`;
+                svgHtml += `<rect id="pt-${htmlPId}" x="${pxX - s/2}" y="${pxY - s/2}" width="${s}" height="${s}" fill="${fillCol}" stroke="${c}" stroke-width="${sw}" style="pointer-events:auto; cursor:pointer;" onclick="abrirModalPuntual('${pIdSafe}', 'arqueta', '${escapeJsStr(p.ref)}')"></rect>`;
             } 
             else if (refUp.includes('POSTE CAJA')) {
                 countsPT.csb++;
@@ -667,7 +687,7 @@ function renderMatrixZanjas() {
                 const s2 = s/2;
                 const triPath = `M ${pxX},${pxY - s2} L ${pxX + s2},${pxY + s2} L ${pxX - s2},${pxY + s2} Z`;
                 
-                svgHtml += `<path id="pt-${pIdSafe}" d="${triPath}" fill="${fillCol}" stroke="${c}" stroke-width="${sw}" style="pointer-events:auto; cursor:pointer;" onclick="abrirModalPuntual('${pIdSafe}', 'box', '${escapeJsStr(p.ref)}')"/>`;
+                svgHtml += `<path id="pt-${htmlPId}" d="${triPath}" fill="${fillCol}" stroke="${c}" stroke-width="${sw}" style="pointer-events:auto; cursor:pointer;" onclick="abrirModalPuntual('${pIdSafe}', 'box', '${escapeJsStr(p.ref)}')"/>`;
                 svgHtml += `<circle cx="${pxX}" cy="${pxY + 2.5}" r="1.5" fill="${c}" style="pointer-events:none;"></circle>`; 
                 svgHtml += `<text x="${pxX}" y="${pxY - s2 - 4}" fill="${c}" font-size="9" font-weight="bold" text-anchor="middle" font-family="sans-serif" style="pointer-events:none;">CSB</text>`;
             }
@@ -687,7 +707,7 @@ function renderMatrixZanjas() {
                 const o = r * 0.7071; 
                 let safeRef = refUp.includes('FC-') ? 'CCTV / FC' : escapeJsStr(p.ref);
                 
-                svgHtml += `<circle id="pt-${pIdSafe}" cx="${pxX}" cy="${pxY}" r="${r}" fill="${fillCol}" stroke="${c}" stroke-width="${sw}" style="pointer-events:auto; cursor:pointer;" onclick="abrirModalPuntual('${pIdSafe}', 'baculo', '${safeRef}')"></circle>`;
+                svgHtml += `<circle id="pt-${htmlPId}" cx="${pxX}" cy="${pxY}" r="${r}" fill="${fillCol}" stroke="${c}" stroke-width="${sw}" style="pointer-events:auto; cursor:pointer;" onclick="abrirModalPuntual('${pIdSafe}', 'baculo', '${safeRef}')"></circle>`;
                 svgHtml += `<line x1="${pxX - o}" y1="${pxY - o}" x2="${pxX + o}" y2="${pxY + o}" stroke="${c}" stroke-width="${sw}" style="pointer-events:none;"></line>`;
                 svgHtml += `<line x1="${pxX - o}" y1="${pxY + o}" x2="${pxX + o}" y2="${pxY - o}" stroke="${c}" stroke-width="${sw}" style="pointer-events:none;"></line>`;
             }
@@ -711,7 +731,7 @@ function renderMatrixZanjas() {
                 const s2 = s/2;
                 const triPath = `M ${pxX},${pxY - s2} L ${pxX + s2},${pxY + s2} L ${pxX - s2},${pxY + s2} Z`;
 
-                svgHtml += `<path id="pt-${pIdSafe}" d="${triPath}" fill="${fillCol}" stroke="${c}" stroke-width="${sw}" style="pointer-events:auto; cursor:pointer;" onclick="abrirModalPuntual('${pIdSafe}', '${pType}', '${escapeJsStr(shortName)}')"/>`;
+                svgHtml += `<path id="pt-${htmlPId}" d="${triPath}" fill="${fillCol}" stroke="${c}" stroke-width="${sw}" style="pointer-events:auto; cursor:pointer;" onclick="abrirModalPuntual('${pIdSafe}', '${pType}', '${escapeJsStr(shortName)}')"/>`;
                 svgHtml += `<circle cx="${pxX}" cy="${pxY + 2.5}" r="1.5" fill="${c}" style="pointer-events:none;"></circle>`; 
                 svgHtml += `<text x="${pxX}" y="${pxY - s2 - 4}" fill="${c}" font-size="9" font-weight="bold" text-anchor="middle" font-family="sans-serif" style="pointer-events:none;">${escapeHtml(shortName)}</text>`; 
             }
@@ -852,9 +872,9 @@ function initPanZoomZanjas() {
         const xs = (mouseX - pzPointX) / pzScale;
         const ys = (mouseY - pzPointY) / pzScale;
         
-        const delta = (e.wheelDelta ? e.wheelDelta : -e.deltaY);
-        if (delta > 0) pzScale *= 1.15;
-        else pzScale /= 1.15;
+        const delta = Math.sign(e.deltaY);
+        if (delta < 0) pzScale *= 1.15;
+        else if (delta > 0) pzScale /= 1.15;
         
         if(pzScale < 0.3) pzScale = 0.3;
         if(pzScale > 8) pzScale = 8;
