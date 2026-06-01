@@ -13,6 +13,8 @@ let chartS = null;
 let chartDiario = null;
 let chartSCB = null;
 let chartDiarioSCB = null;
+let chartZanjas = null;
+let chartPuntuales = null;
 
 localforage.config({ name: 'SIGMA_PROD_V1', storeName: 'produccion_hincas' });
 
@@ -450,9 +452,21 @@ function procesarZanjas(arcoSeleccionado) {
         return;
     }
 
+    const FASES = [
+        {k:'excavacion', l:'1. Excavación', i:'fa-solid fa-digging'},
+        {k:'cama_arena', l:'2. Cama arena', i:'fa-regular fa-circle'},
+        {k:'inspeccion_cables', l:'3. Inspección cables', i:'fa-solid fa-magnifying-glass'},
+        {k:'ruteado_peinado', l:'4. Ruteado y peinado', i:'fa-solid fa-cable-car'},
+        {k:'identificacion_cables', l:'5. Identificación cables', i:'fa-solid fa-tag'},
+        {k:'cinta_seguridad', l:'6. Cinta seguridad', i:'fa-solid fa-tape'},
+        {k:'cierre_zanja', l:'7. Cierre de zanja', i:'fa-solid fa-check'}
+    ];
+    const TIPOS = ['MT','BT','SSAA','PAT','CCTV','ENTRADA_PS','OTRAS'];
+
     let totalMetrosProyecto = 0;
     let metrosPorItem = { excavacion: 0, cama_arena: 0, inspeccion_cables: 0, ruteado_peinado: 0, identificacion_cables: 0, cinta_seguridad: 0, cierre_zanja: 0 };
-    let metrosPorTipo = {}; 
+    let metrosPorTipo = {};
+    let metrosPorFaseYTipo = {};
 
     zValues.forEach(z => {
         const dx = z.x2 - z.x1; const dy = z.y2 - z.y1;
@@ -463,34 +477,94 @@ function procesarZanjas(arcoSeleccionado) {
         metrosPorTipo[type].total += longitud;
 
         let stats = HISTORIAL_ZANJAS[z.id] || {};
-        if (stats.excavacion) metrosPorItem.excavacion += stats.excavacion;
-        if (stats.cama_arena) metrosPorItem.cama_arena += stats.cama_arena;
-        if (stats.inspeccion_cables) metrosPorItem.inspeccion_cables += stats.inspeccion_cables;
-        if (stats.ruteado_peinado) metrosPorItem.ruteado_peinado += stats.ruteado_peinado;
-        if (stats.identificacion_cables) metrosPorItem.identificacion_cables += stats.identificacion_cables;
-        if (stats.cinta_seguridad) metrosPorItem.cinta_seguridad += stats.cinta_seguridad;
-        if (stats.cierre_zanja) { metrosPorItem.cierre_zanja += stats.cierre_zanja; metrosPorTipo[type].ejecutado += stats.cierre_zanja; }
+        FASES.forEach(f => {
+            const val = stats[f.k] || 0;
+            if (val) {
+                metrosPorItem[f.k] += val;
+                if (!metrosPorFaseYTipo[f.k]) metrosPorFaseYTipo[f.k] = {};
+                if (!metrosPorFaseYTipo[f.k][type]) metrosPorFaseYTipo[f.k][type] = 0;
+                metrosPorFaseYTipo[f.k][type] += val;
+                if (f.k === 'cierre_zanja') metrosPorTipo[type].ejecutado += val;
+            }
+        });
     });
 
+    if (!window._zanjaFilterType) window._zanjaFilterType = 'TODOS';
+    const selType = window._zanjaFilterType;
+
+    const typeTabs = `<div style="display:flex; flex-wrap:wrap; gap:3px;">` +
+        `<button class="dash-tab ${selType==='TODOS'?'active':''}" style="font-size:10px;padding:3px 8px;" onclick="window._zanjaFilterType='TODOS';procesarDashboard()">Todos</button>` +
+        TIPOS.map(t => `<button class="dash-tab ${selType===t?'active':''}" style="font-size:10px;padding:3px 8px;" onclick="window._zanjaFilterType='${t}';procesarDashboard()">${t}</button>`).join('') +
+        `</div>`;
+
+    const baseTotal = selType !== 'TODOS' ? (metrosPorTipo[selType]?.total || 0) : totalMetrosProyecto;
+
+    const phasesGrid = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">` +
+        FASES.map(f => {
+            const phaseTotal = metrosPorItem[f.k];
+            const filtered = selType !== 'TODOS' ? (metrosPorFaseYTipo[f.k]?.[selType] || 0) : phaseTotal;
+            const pct = baseTotal > 0 ? ((filtered / baseTotal) * 100).toFixed(1) : 0;
+            return `<div style="background:#fafbfc;border:1px solid #e8edf4;border-radius:4px;padding:7px 9px;">
+                <div style="display:flex;justify-content:space-between;font-size:10px;font-weight:600;color:#475569;margin-bottom:2px;">
+                    <span><i class="${f.i}" style="width:12px;color:#005596;font-size:10px;"></i> ${f.l}</span>
+                    <span style="color:${f.k==='cierre_zanja'?'#16a34a':'#005596'}">${Math.round(filtered).toLocaleString()}m</span>
+                </div>
+                <div style="width:100%;background:#e8edf4;height:4px;border-radius:2px;overflow:hidden;">
+                    <div style="width:${pct}%;background:${f.k==='cierre_zanja'?'#16a34a':'#3b82f6'};height:100%;border-radius:2px;"></div>
+                </div>
+                <div style="font-size:9px;color:#94a3b8;margin-top:1px;font-weight:600;">${pct}%</div>
+            </div>`;
+        }).join('') + `</div>`;
+
+    const labels = []; const diseño = []; const ejec = [];
+    TIPOS.forEach(t => {
+        if (metrosPorTipo[t] && metrosPorTipo[t].total > 0) {
+            labels.push(t); diseño.push(Math.round(metrosPorTipo[t].total)); ejec.push(Math.round(metrosPorTipo[t].ejecutado));
+        }
+    });
+
+    if (chartZanjas) chartZanjas.destroy();
+    const chartHtml = labels.length ? `<div style="margin-bottom:16px;">
+        <h3 style="margin:0 0 10px 0;color:#1e293b;font-size:13px;font-weight:700;">Producción por Tipo de Circuito</h3>
+        <div style="position:relative;height:200px;width:100%;"><canvas id="chartZanjas"></canvas></div>
+    </div>` : '';
+
+    const tableRows = TIPOS.filter(t => metrosPorTipo[t]).map(t => {
+        const item = metrosPorTipo[t]; const pend = Math.max(0, item.total - item.ejecutado);
+        const p = item.total > 0 ? ((item.ejecutado / item.total) * 100).toFixed(1) : 0;
+        return `<tr><td style="font-weight:600;font-size:11px;">${t}</td><td style="text-align:right;font-size:11px;">${Math.round(item.total).toLocaleString()} m</td><td style="text-align:right;color:#16a34a;font-weight:600;font-size:11px;">${Math.round(item.ejecutado).toLocaleString()} m</td><td style="text-align:right;color:#dc2626;font-size:11px;">${Math.round(pend).toLocaleString()} m</td><td style="text-align:right;font-weight:700;font-size:11px;">${p}%</td></tr>`;
+    }).join('');
+
     containerZanjas.innerHTML = `
-        <h3 style="margin: 0 0 15px 0; color: #1e293b; font-size: 14px; font-weight: 700;">Avance por Fases Constructivas</h3>
-        <div style="margin-bottom:25px;">
-            ${[{k:'excavacion', l:'1. Excavación', i:'fa-solid fa-digging'}, {k:'cama_arena', l:'2. Cama de arena', i:'fa-regular fa-circle'}, {k:'inspeccion_cables', l:'3. Inspección de cables', i:'fa-solid fa-magnifying-glass'}, {k:'ruteado_peinado', l:'4. Ruteado y peinado', i:'fa-solid fa-cable-car'}, {k:'identificacion_cables', l:'5. Identificación cables', i:'fa-solid fa-tag'}, {k:'cinta_seguridad', l:'6. Cinta seguridad', i:'fa-solid fa-tape'}, {k:'cierre_zanja', l:'7. Cierre de zanja', i:'fa-solid fa-check'}].map(f => {
-                const m = metrosPorItem[f.k]; const pct = totalMetrosProyecto > 0 ? ((m / totalMetrosProyecto) * 100).toFixed(1) : 0;
-                return `<div style="margin-bottom: 8px;"><div style="display:flex; justify-content:space-between; font-size:12px; font-weight:600; color:#475569; margin-bottom:4px;"><span><i class="${f.i}" style="width:16px; color:#005596;"></i> ${f.l}</span><span>${Math.round(m).toLocaleString()} m (${pct}%)</span></div><div style="width:100%; background:#e8edf4; height:6px; border-radius:3px; overflow:hidden;"><div style="width:${pct}%; background:${f.k==='cierre_zanja'?'#16a34a':'#3b82f6'}; height:100%; border-radius:3px;"></div></div></div>`;
-            }).join('')}
+        <div style="margin-bottom:16px;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+                <h3 style="margin:0;color:#1e293b;font-size:13px;font-weight:700;">Avance por Fases</h3>
+                <span style="font-size:10px;color:#64748b;font-weight:600;">Filtrar:</span>
+                ${typeTabs}
+            </div>
+            ${phasesGrid}
         </div>
-        
-        <h3 style="margin: 0 0 15px 0; color: #1e293b; font-size: 14px; font-weight: 700;">Balance por Tipo de Circuito</h3>
-        <table class="dash-table">
-            <thead><tr><th>Tipo Circuito</th><th style="text-align:right;">Diseño</th><th style="text-align:right;">Completado</th><th style="text-align:right;">Pendiente</th><th style="text-align:right;">Avance</th></tr></thead>
-            <tbody>
-                ${Object.keys(metrosPorTipo).sort().map(t => {
-                    const item = metrosPorTipo[t]; const pend = Math.max(0, item.total - item.ejecutado); const p = item.total > 0 ? ((item.ejecutado / item.total) * 100).toFixed(1) : 0;
-                    return `<tr><td style="font-weight:600;">${t}</td><td style="text-align:right;">${Math.round(item.total).toLocaleString()} m</td><td style="text-align:right; color:#16a34a; font-weight:600;">${Math.round(item.ejecutado).toLocaleString()} m</td><td style="text-align:right; color:#dc2626;">${Math.round(pend).toLocaleString()} m</td><td style="text-align:right; font-weight:700;">${p}%</td></tr>`;
-                }).join('')}
-            </tbody>
-        </table>`;
+        ${chartHtml}
+        <div>
+            <h3 style="margin:0 0 10px 0;color:#1e293b;font-size:13px;font-weight:700;">Balance por Tipo de Circuito</h3>
+            <table class="dash-table"><thead><tr><th style="font-size:10px;">Tipo</th><th style="text-align:right;font-size:10px;">Diseño</th><th style="text-align:right;font-size:10px;">Ejecutado</th><th style="text-align:right;font-size:10px;">Pendiente</th><th style="text-align:right;font-size:10px;">%</th></tr></thead>
+            <tbody>${tableRows}</tbody></table>
+        </div>`;
+
+    const elChartZ = document.getElementById('chartZanjas');
+    if (elChartZ) {
+        chartZanjas = new Chart(elChartZ.getContext('2d'), {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [
+                    { label: 'Diseño', data: diseño, backgroundColor: '#94a3b8', borderRadius: 3, barPercentage: 0.7 },
+                    { label: 'Ejecutado', data: ejec, backgroundColor: '#16a34a', borderRadius: 3, barPercentage: 0.7 }
+                ]
+            },
+            options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, grid: { color: '#e8edf4' } }, x: { grid: { display: false } } }, plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, padding: 12, font: { size: 10 } } } } }
+        });
+    }
 }
 
 function procesarPuntuales(arcoSeleccionado) {
@@ -506,38 +580,72 @@ function procesarPuntuales(arcoSeleccionado) {
     }
 
     let resumenTipos = {};
+    let prodDiariaPuntuales = {};
 
     pValues.forEach(p => {
         const refUp = p.ref.toUpperCase();
         let typeKey = 'otras'; let label = 'Otros Elementos'; let maxChecks = 6;
-        if (refUp.includes('ARQUETA')) { typeKey = 'arqueta'; label = '📥 Arquetas Registro'; maxChecks = 6; } 
-        else if (refUp.includes('POSTE CAJA')) { typeKey = 'csb'; label = '📦 Postes Caja (CSB)'; maxChecks = 7; }
-        else if (refUp.includes('BÁCULO-CCTV') || refUp.includes('BACULO-CCTV') || refUp.includes('CCTV') || refUp.includes('FC-')) { typeKey = 'cctv'; label = '🎥 Báculos CCTV'; maxChecks = 6; }
-        else if (refUp.includes('GATEWAY')) { typeKey = 'gateway'; label = '📡 Gateways'; maxChecks = 7; }
-        else if (refUp.includes('MBOX')) { typeKey = 'mbox'; label = '⚡ Cajas MBox'; maxChecks = 7; }
-        else if (refUp.includes('TBOX')) { typeKey = 'tbox'; label = '🔋 Cajas TBox'; maxChecks = 7; }
-        else if (refUp.includes('METEO')) { typeKey = 'meteo'; label = '🌤️ Estaciones Meteo'; maxChecks = 6; }
+        if (refUp.includes('ARQUETA')) { typeKey = 'arqueta'; label = 'Arquetas Registro'; maxChecks = 6; }
+        else if (refUp.includes('POSTE CAJA')) { typeKey = 'csb'; label = 'Postes Caja (CSB)'; maxChecks = 7; }
+        else if (refUp.includes('BÁCULO-CCTV') || refUp.includes('BACULO-CCTV') || refUp.includes('CCTV') || refUp.includes('FC-')) { typeKey = 'cctv'; label = 'Báculos CCTV'; maxChecks = 6; }
+        else if (refUp.includes('GATEWAY')) { typeKey = 'gateway'; label = 'Gateways'; maxChecks = 7; }
+        else if (refUp.includes('MBOX')) { typeKey = 'mbox'; label = 'Cajas MBox'; maxChecks = 7; }
+        else if (refUp.includes('TBOX')) { typeKey = 'tbox'; label = 'Cajas TBox'; maxChecks = 7; }
+        else if (refUp.includes('METEO')) { typeKey = 'meteo'; label = 'Estaciones Meteo'; maxChecks = 6; }
 
         if (!resumenTipos[typeKey]) resumenTipos[typeKey] = { label: label, total: 0, sin_empezar: 0, en_proceso: 0, terminados: 0, maxC: maxChecks };
         resumenTipos[typeKey].total++;
         
         let checks = HISTORIAL_PUNTUALES[p.id] || {};
         let count = 0;
-        Object.keys(checks).forEach(k => { if(checks[k]) count++; });
+        let fechas = [];
+        Object.keys(checks).forEach(k => {
+            if (checks[k]) { count++; fechas.push(checks[k]); }
+        });
         
         if (count === 0) resumenTipos[typeKey].sin_empezar++;
         else if (count === maxChecks) resumenTipos[typeKey].terminados++;
         else resumenTipos[typeKey].en_proceso++;
+
+        if (fechas.length > 0) {
+            fechas.sort();
+            const fInicio = fechas[0];
+            if (!prodDiariaPuntuales[fInicio]) prodDiariaPuntuales[fInicio] = { iniciadas: 0, finalizadas: 0 };
+            prodDiariaPuntuales[fInicio].iniciadas++;
+
+            if (count === maxChecks) {
+                const fFin = fechas[fechas.length - 1];
+                if (!prodDiariaPuntuales[fFin]) prodDiariaPuntuales[fFin] = { iniciadas: 0, finalizadas: 0 };
+                prodDiariaPuntuales[fFin].finalizadas++;
+            }
+        }
     });
 
+    if (chartPuntuales) chartPuntuales.destroy();
+    const fechasPD = Object.keys(prodDiariaPuntuales).sort();
+    const elChartPP = document.getElementById('chartPuntuales');
+    if (elChartPP) {
+        chartPuntuales = new Chart(elChartPP.getContext('2d'), {
+            type: 'bar',
+            data: {
+                labels: fechasPD.length ? fechasPD : ['Sin datos'],
+                datasets: [
+                    { label: 'Iniciadas', data: fechasPD.map(f => prodDiariaPuntuales[f].iniciadas), backgroundColor: '#f97316', borderRadius: 3, barPercentage: 0.7 },
+                    { label: 'Finalizadas', data: fechasPD.map(f => prodDiariaPuntuales[f].finalizadas), backgroundColor: '#16a34a', borderRadius: 3, barPercentage: 0.7 }
+                ]
+            },
+            options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, grid: { color: '#e8edf4' } }, x: { grid: { display: false } } }, plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, padding: 12, font: { size: 10 } } } } }
+        });
+    }
+
     containerPuntuales.innerHTML = `
-        <h3 style="margin: 0 0 15px 0; color: #1e293b; font-size: 14px; font-weight: 700;">Progreso por Tipo de Equipamiento</h3>
+        <h3 style="margin:0 0 10px 0;color:#1e293b;font-size:13px;font-weight:700;">Progreso por Tipo de Equipamiento</h3>
         <table class="dash-table">
-            <thead><tr><th>Descripción</th><th style="text-align:center;">Total</th><th style="text-align:center;">Sin Empezar</th><th style="text-align:center;">En Proceso</th><th style="text-align:center;">Terminado</th><th style="text-align:center;">Avance</th></tr></thead>
+            <thead><tr><th style="font-size:10px;">Descripción</th><th style="text-align:center;font-size:10px;">Total</th><th style="text-align:center;font-size:10px;">Pendiente</th><th style="text-align:center;font-size:10px;">En Proceso</th><th style="text-align:center;font-size:10px;">Terminado</th><th style="text-align:center;font-size:10px;">%</th></tr></thead>
             <tbody>
                 ${Object.keys(resumenTipos).sort().map(k => {
                     const r = resumenTipos[k]; const pOk = r.total > 0 ? ((r.terminados / r.total) * 100).toFixed(0) : 0;
-                    return `<tr><td style="font-weight:600;">${r.label}</td><td style="text-align:center; font-weight:600;">${r.total}</td><td style="text-align:center; color:#dc2626;">${r.sin_empezar}</td><td style="text-align:center; color:#ea580c;">${r.en_proceso}</td><td style="text-align:center; color:#16a34a; font-weight:600;">${r.terminados}</td><td style="text-align:center; font-weight:700;">${pOk}%</td></tr>`;
+                    return `<tr><td style="font-weight:600;font-size:11px;">${r.label}</td><td style="text-align:center;font-weight:600;font-size:11px;">${r.total}</td><td style="text-align:center;color:#dc2626;font-size:11px;">${r.sin_empezar}</td><td style="text-align:center;color:#ea580c;font-size:11px;">${r.en_proceso}</td><td style="text-align:center;color:#16a34a;font-weight:600;font-size:11px;">${r.terminados}</td><td style="text-align:center;font-weight:700;font-size:11px;">${pOk}%</td></tr>`;
                 }).join('')}
             </tbody>
         </table>`;
