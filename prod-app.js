@@ -249,9 +249,9 @@ function procesarDatosJSON(data, fileArco) {
             const ref = row['REFERENCIA'] || row['REFERENCIA (LINEAL)'] || row['TIPO'] || row['CAPA'] || 'ZANJA';
             
             if (x1 !== 0 && y1 !== 0 && x2 !== 0 && y2 !== 0) {
-                const zArcoCol = row['ARCO'] || '';
+                const zArcoCol = detectarArco(row['ARCO'] || '');
                 const zArcoRef = detectarArco(ref);
-                const zArco = zArcoCol || (zArcoRef !== 'S/A' ? zArcoRef : arcoEnEsteArchivo);
+                const zArco = zArcoCol !== 'S/A' ? zArcoCol : (zArcoRef !== 'S/A' ? zArcoRef : arcoEnEsteArchivo);
                 const safeRef = String(ref).replace(/[\.\-\s]/g, '_'); 
                 const zId = `Z_${x1}_${y1}_${x2}_${y2}_${safeRef}_${zArco}`;
                 PARQUE_ZANJAS[zId] = { id: zId, ref: ref, x1: x1, y1: y1, x2: x2, y2: y2, arco: zArco };
