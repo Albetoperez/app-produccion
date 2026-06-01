@@ -9,7 +9,7 @@
     <link rel="stylesheet" href="prod-style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        body { background: #f8fafc; overflow-y: auto; padding-bottom: 40px; }
+        body.dashboard-mode { background: #f8fafc; overflow-y: auto; padding-bottom: 40px; }
         .dashboard-container { max-width: 1200px; margin: 0 auto; padding: 20px; }
         .dash-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; background: white; padding: 15px 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border: 1px solid #cbd5e1; }
         .dash-select { padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; outline: none; font-weight: bold; color: var(--blue); font-family: inherit; font-size: 14px; }
@@ -35,7 +35,7 @@
         .kpi-box { padding: 15px; border-radius: 8px; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border: 1px solid #cbd5e1; text-align: center; }
     </style>
 </head>
-<body>
+<body class="dashboard-mode">
     <header>
         <div class="logo-area">
             <span class="brand">ELECNOR</span>
