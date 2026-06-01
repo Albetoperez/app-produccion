@@ -538,6 +538,24 @@ function getZanjaColorByType(type) {
     return colors[type] || '#94a3b8';
 }
 
+function getZanjaColorByProgress(zId, maxMetros) {
+    const stats = HISTORIAL_ZANJAS[zId] || {};
+    const itemIds = ['excavacion', 'cama_arena', 'inspeccion_cables', 'ruteado_peinado', 'identificacion_cables', 'cinta_seguridad', 'cierre_zanja'];
+    
+    let anyStarted = false;
+    let allFinished = true;
+    
+    itemIds.forEach(itemId => {
+        const val = stats[itemId];
+        if (val !== undefined && val > 0) anyStarted = true;
+        if (!(val !== undefined && val >= maxMetros)) allFinished = false;
+    });
+    
+    if (!anyStarted) return '#94a3b8';
+    if (allFinished) return '#22c55e';
+    return '#f59e0b';
+}
+
 function contarChecksPuntual(checks, type) {
     let count = 0;
     const items = CHECKLIST_PUNTUALES[type];
@@ -629,7 +647,8 @@ function renderMatrixZanjas() {
 
             const pxX1 = ((z.x1 - gMinX) * baseScaleX) + MARGIN; const pxY1 = ((gMaxY - z.y1) * baseScaleY) + MARGIN;
             const pxX2 = ((z.x2 - gMinX) * baseScaleX) + MARGIN; const pxY2 = ((gMaxY - z.y2) * baseScaleY) + MARGIN;
-            const strokeColor = getZanjaColorByType(type);
+            const maxMetros = Math.round(longitud);
+            const strokeColor = getZanjaColorByProgress(z.id, maxMetros);
             
             const grosorFinal = 4 / pzScale;
             const safeZId = escapeJsStr(z.id);
@@ -1299,6 +1318,7 @@ async function changeMetrosZanja(id, itemId, value, maxMetros) {
         HISTORIAL_ZANJAS[id][itemId] = num;
     }
     try { await localforage.setItem('HISTORIAL_ZANJAS', HISTORIAL_ZANJAS); } catch (e) { console.error(e); }
+    renderMatrixZanjas();
 }
 
 function renderDashboardZanjas() {
