@@ -278,7 +278,7 @@ function procesarDatosJSON(data, fileArco) {
         if (row['PUNTO'] !== undefined || tIdStr.includes('-PS-')) {
             const match = tIdStr.match(/ARCO\s*(\d+)|ARC\s*(\d+)/);
             const arcoPS = match ? `ARC${match[1] || match[2]}` : 'S/A';
-            const blockPS = tIdStr.split('-').pop().trim();
+            const blockPS = row['BLOQUE'] !== undefined && row['BLOQUE'] !== null && row['BLOQUE'] !== '' ? String(row['BLOQUE']).trim() : tIdStr.split('-').pop().trim();
             if (!PARQUE_ESTACIONES[tIdStr]) { PARQUE_ESTACIONES[tIdStr] = { name: tIdStr, arco: arcoPS, block: blockPS, minX: x, maxX: x, minY: y, maxY: y }; } 
             else { PARQUE_ESTACIONES[tIdStr].minX = Math.min(PARQUE_ESTACIONES[tIdStr].minX, x); PARQUE_ESTACIONES[tIdStr].maxX = Math.max(PARQUE_ESTACIONES[tIdStr].maxX, x); PARQUE_ESTACIONES[tIdStr].minY = Math.min(PARQUE_ESTACIONES[tIdStr].minY, y); PARQUE_ESTACIONES[tIdStr].maxY = Math.max(PARQUE_ESTACIONES[tIdStr].maxY, y); }
             return; 
@@ -287,7 +287,7 @@ function procesarDatosJSON(data, fileArco) {
         if (tIdStr.includes('-SB-')) {
             const match = tIdStr.match(/ARCO\s*(\d+)|ARC\s*(\d+)/);
             const arcoSB = match ? `ARC${match[1] || match[2]}` : 'S/A';
-            const blockRaw = (tIdStr.split('-')[2] || '').trim();
+            const blockRaw = row['BLOQUE'] !== undefined && row['BLOQUE'] !== null && row['BLOQUE'] !== '' ? String(row['BLOQUE']).trim() : (tIdStr.split('-')[2] || '').trim();
             const blockSB = blockRaw || 'S/B'; 
             if (!PARQUE_CAJAS[tIdStr]) { PARQUE_CAJAS[tIdStr] = { name: tIdStr, arco: arcoSB, block: blockSB, minX: x, maxX: x, minY: y, maxY: y }; } 
             else { PARQUE_CAJAS[tIdStr].minX = Math.min(PARQUE_CAJAS[tIdStr].minX, x); PARQUE_CAJAS[tIdStr].maxX = Math.max(PARQUE_CAJAS[tIdStr].maxX, x); PARQUE_CAJAS[tIdStr].minY = Math.min(PARQUE_CAJAS[tIdStr].minY, y); PARQUE_CAJAS[tIdStr].maxY = Math.max(PARQUE_CAJAS[tIdStr].maxY, y); }
