@@ -266,9 +266,12 @@ function procesarDatosJSON(data, fileArco) {
         if (refPuntual && xp !== 0 && yp !== 0 && row['FILA'] === undefined && row['HINCA'] === undefined && !String(refPuntual).toUpperCase().includes('-SB-') && !String(refPuntual).toUpperCase().includes('-PS-')) {
             const upRef = String(refPuntual).toUpperCase();
             if (upRef.includes('ARQUETA') || upRef.includes('BÁCULO') || upRef.includes('BACULO') || upRef.includes('PVH') || upRef.includes('TORRE') || upRef.includes('AGRUPAMIENTO') || upRef.includes('FC-') || upRef.includes('GATEWAY') || upRef.includes('MBOX') || upRef.includes('TBOX') || upRef.includes('METEO') || upRef.includes('CSB') || upRef.includes('CCTV')) {
-                const safePRef = String(upRef).replace(/[\.\-\s]/g, '_'); 
-                const pId = `PT_${xp}_${yp}_${safePRef}_${arcoEnEsteArchivo}`;
-                PARQUE_PUNTUALES[pId] = { id: pId, ref: String(refPuntual), x: xp, y: yp, arco: arcoEnEsteArchivo };
+                const safePRef = String(upRef).replace(/[\.\-\s]/g, '_');
+                const pArcoCol = detectarArco(row['ARCO'] || '');
+                const pArcoRef = detectarArco(upRef);
+                const pArco = pArcoCol !== 'S/A' ? pArcoCol : (pArcoRef !== 'S/A' ? pArcoRef : arcoEnEsteArchivo);
+                const pId = `PT_${xp}_${yp}_${safePRef}_${pArco}`;
+                PARQUE_PUNTUALES[pId] = { id: pId, ref: String(refPuntual), x: xp, y: yp, arco: pArco };
                 return;
             }
         }
