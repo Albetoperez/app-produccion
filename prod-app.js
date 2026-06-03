@@ -192,7 +192,7 @@ async function importarArchivos(input) {
         const file = files[i];
         if (file.size > MAX_FILE_SIZE) { alert(`⚠️ Archivo demasiado grande.`); continue; }
         
-        const fileArcoMatch = file.name.toUpperCase().match(/ARCO\s*(\d+)|ARC\s*(\d+)/);
+        const fileArcoMatch = file.name.toUpperCase().match(/ARCO[-\s_.]*(\d+)|ARC[-\s_.]*(\d+)/);
         const fileArco = fileArcoMatch ? `ARC${fileArcoMatch[1] || fileArcoMatch[2]}` : null;
 
         const reader = new FileReader();
@@ -239,7 +239,7 @@ const parseCoord = (val) => { if(!val) return 0; return parseFloat(String(val).r
 
 function detectarArco(id) {
     const clean = id.replace(/\s+/g, '');
-    const match = clean.match(/ARCO\s*(\d+)|ARC\s*(\d+)/i);
+    const match = clean.match(/ARCO[-\s_.]*(\d+)|ARC[-\s_.]*(\d+)/i);
     return match ? `ARC${match[1] || match[2]}` : 'S/A';
 }
 
@@ -253,7 +253,7 @@ function procesarDatosJSON(data, fileArco) {
             const codigoKey = keys.find(k => k.trim().replace(/[_-]/g, ' ').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase() === 'CODIGO');
             const refKey = keys.find(k => k.trim().replace(/[_-]/g, ' ').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase() === 'REFERENCIA');
             let val = String(rawRow[codigoKey] || rawRow[refKey] || rawRow['TIPO'] || rawRow['CAPA'] || '').toUpperCase();
-            let m = val.match(/ARCO\s*(\d+)|ARC\s*(\d+)/);
+            let m = val.match(/ARCO[-\s_.]*(\d+)|ARC[-\s_.]*(\d+)/);
             if (m) { arcoEnEsteArchivo = `ARC${m[1] || m[2]}`; break; }
         }
     }
@@ -281,8 +281,14 @@ function procesarDatosJSON(data, fileArco) {
 
         const nPosteKey = Object.keys(row).find(k => /^N[º°\s\.]*POSTE$|^NUMERO\s*[º°\s]?\s*POSTE$|^N[º°\s\.]+\s*POSTE$/i.test(k));
         const parcelaKey = Object.keys(row).find(k => k === 'PARCELA');
-        const coordXKey = Object.keys(row).find(k => k === 'COORDENADA X' || k === 'X');
-        const coordYKey = Object.keys(row).find(k => k === 'COORDENADA Y' || k === 'Y');
+        const coordXKey = Object.keys(row).find(k => {
+            const u = k.toUpperCase();
+            return u === 'X' || u === 'COORDENADA X' || u === 'COORD X' || u === 'COORDENADAX' || /^X\b/.test(u);
+        });
+        const coordYKey = Object.keys(row).find(k => {
+            const u = k.toUpperCase();
+            return u === 'Y' || u === 'COORDENADA Y' || u === 'COORD Y' || u === 'COORDENADAY' || /^Y\b/.test(u);
+        });
 
         if (nPosteKey && parcelaKey && coordXKey && coordYKey) {
             const nPoste = parseInt(String(row[nPosteKey]).replace(/[^\d]/g, ''), 10);
@@ -326,8 +332,8 @@ function procesarDatosJSON(data, fileArco) {
         if (x === 0 && y === 0) return;
 
         if (row['PUNTO'] !== undefined || tIdStr.includes('-PS-')) {
-            const match = tIdStr.match(/ARCO\s*(\d+)|ARC\s*(\d+)/);
-            const arcoPS = match ? `ARC${match[1] || match[2]}` : 'S/A';
+            const matchPS = tIdStr.match(/ARCO[-\s_.]*(\d+)|ARC[-\s_.]*(\d+)/);
+            const arcoPS = matchPS ? `ARC${matchPS[1] || matchPS[2]}` : 'S/A';
             const blockPS = row['BLOQUE'] !== undefined && row['BLOQUE'] !== null && row['BLOQUE'] !== '' ? String(row['BLOQUE']).trim() : tIdStr.split('-').pop().trim();
             if (!PARQUE_ESTACIONES[tIdStr]) { PARQUE_ESTACIONES[tIdStr] = { name: tIdStr, arco: arcoPS, block: blockPS, minX: x, maxX: x, minY: y, maxY: y }; } 
             else { PARQUE_ESTACIONES[tIdStr].minX = Math.min(PARQUE_ESTACIONES[tIdStr].minX, x); PARQUE_ESTACIONES[tIdStr].maxX = Math.max(PARQUE_ESTACIONES[tIdStr].maxX, x); PARQUE_ESTACIONES[tIdStr].minY = Math.min(PARQUE_ESTACIONES[tIdStr].minY, y); PARQUE_ESTACIONES[tIdStr].maxY = Math.max(PARQUE_ESTACIONES[tIdStr].maxY, y); }
@@ -335,8 +341,8 @@ function procesarDatosJSON(data, fileArco) {
         }
 
         if (tIdStr.includes('-SB-')) {
-            const match = tIdStr.match(/ARCO\s*(\d+)|ARC\s*(\d+)/);
-            const arcoSB = match ? `ARC${match[1] || match[2]}` : 'S/A';
+            const matchSB = tIdStr.match(/ARCO[-\s_.]*(\d+)|ARC[-\s_.]*(\d+)/);
+            const arcoSB = matchSB ? `ARC${matchSB[1] || matchSB[2]}` : 'S/A';
             const blockRaw = row['BLOQUE'] !== undefined && row['BLOQUE'] !== null && row['BLOQUE'] !== '' ? String(row['BLOQUE']).trim() : (tIdStr.split('-')[2] || '').trim();
             const blockSB = blockRaw || 'S/B'; 
             if (!PARQUE_CAJAS[tIdStr]) { PARQUE_CAJAS[tIdStr] = { name: tIdStr, arco: arcoSB, block: blockSB, minX: x, maxX: x, minY: y, maxY: y }; } 
@@ -385,7 +391,13 @@ function actualizarBloques() {
     Object.values(PARQUE_MASTER).forEach(tr => { if(tr.arco === arcoSeleccionado && tr.block) bloques.add(tr.block.charAt(0)); });
     Object.values(PARQUE_ESTACIONES).forEach(ps => { if(ps.arco === arcoSeleccionado && ps.block) bloques.add(ps.block.charAt(0)); });
     Object.values(PARQUE_CAJAS).forEach(sb => { if(sb.arco === arcoSeleccionado && sb.block) bloques.add(sb.block.charAt(0)); });
-    document.getElementById('select-block').innerHTML = Array.from(bloques).sort().map(b => `<option value="${b}">BLOQUE ${b}</option>`).join('');
+    if (bloques.size === 0) {
+        document.getElementById('select-block').innerHTML = `<option value="">—</option>`;
+        document.getElementById('filter-block-container').style.display = 'none';
+    } else {
+        document.getElementById('select-block').innerHTML = Array.from(bloques).sort().map(b => `<option value="${b}">BLOQUE ${b}</option>`).join('');
+        document.getElementById('filter-block-container').style.display = 'inline-block';
+    }
     
     pzScale = 1; pzPointX = 0; pzPointY = 0;
     renderMatrixSelector();
