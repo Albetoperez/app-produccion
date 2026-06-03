@@ -279,7 +279,7 @@ function procesarDatosJSON(data, fileArco) {
             return; 
         }
 
-        const nPosteKey = Object.keys(row).find(k => /^N[º\s]*POSTE$|^NUMERO\s+POSTE$|^N\s+POSTE$/.test(k));
+        const nPosteKey = Object.keys(row).find(k => /^N[º°\s\.]*POSTE$|^NUMERO\s*[º°\s]?\s*POSTE$|^N[º°\s\.]+\s*POSTE$/i.test(k));
         const parcelaKey = Object.keys(row).find(k => k === 'PARCELA');
         const coordXKey = Object.keys(row).find(k => k === 'COORDENADA X' || k === 'X');
         const coordYKey = Object.keys(row).find(k => k === 'COORDENADA Y' || k === 'Y');
@@ -412,8 +412,9 @@ async function renderMatrix() {
         const ids = Object.keys(PARQUE_MASTER).filter(id => PARQUE_MASTER[id].arco === arco && PARQUE_MASTER[id].block.startsWith(block));
         const psIds = Object.keys(PARQUE_ESTACIONES).filter(id => PARQUE_ESTACIONES[id].arco === arco && PARQUE_ESTACIONES[id].block.startsWith(block));
         const sbIds = Object.keys(PARQUE_CAJAS).filter(id => PARQUE_CAJAS[id].arco === arco && PARQUE_CAJAS[id].block.startsWith(block));
+        let vEM = Object.values(PARQUE_VALLADO).filter(v => v.arco === arco);
 
-        if(ids.length === 0 && psIds.length === 0 && sbIds.length === 0) { 
+        if(ids.length === 0 && psIds.length === 0 && sbIds.length === 0 && vEM.length === 0) { 
             container.innerHTML = '<div class="empty-state">No hay datos para este bloque.</div>'; 
             return; 
         }
@@ -422,6 +423,7 @@ async function renderMatrix() {
         ids.forEach(id => { const tr = PARQUE_MASTER[id]; if(tr.minX < gMinX) gMinX = tr.minX; if(tr.maxX > gMaxX) gMaxX = tr.maxX; if(tr.minY < gMinY) gMinY = tr.minY; if(tr.maxY > gMaxY) gMaxY = tr.maxY; });
         psIds.forEach(id => { const ps = PARQUE_ESTACIONES[id]; if(ps.minX < gMinX) gMinX = ps.minX; if(ps.maxX > gMaxX) gMaxX = ps.maxX; if(ps.minY < gMinY) gMinY = ps.minY; if(ps.maxY > gMaxY) gMaxY = ps.maxY; });
         sbIds.forEach(id => { const sb = PARQUE_CAJAS[id]; if(sb.minX < gMinX) gMinX = sb.minX; if(sb.maxX > gMaxX) gMaxX = sb.maxX; if(sb.minY < gMinY) gMinY = sb.minY; if(sb.maxY > gMaxY) gMaxY = sb.maxY; });
+        vEM.forEach(v => { if(v.x < gMinX) gMinX = v.x; if(v.x > gMaxX) gMaxX = v.x; if(v.y < gMinY) gMinY = v.y; if(v.y > gMaxY) gMaxY = v.y; });
 
         if (gMinX === Infinity) gMinX = 0;
         if (gMaxX === -Infinity) gMaxX = 1;
@@ -491,7 +493,6 @@ async function renderMatrix() {
             }
             html += `</div>`;
         }
-        let vEM = Object.values(PARQUE_VALLADO).filter(v => v.arco === arco);
         if (vEM.length > 0) {
             let gruposEM = {};
             vEM.forEach(v => {
@@ -718,13 +719,17 @@ function renderMatrixZanjas() {
         const canvasHeight = (rY * baseScaleY) + (MARGIN * 2);
 
         if (pzCurrentArco !== arco) {
-            pzScale = 1;
             const cw = container.clientWidth || 1000;
-            const ch = 500; 
-            pzPointX = (cw - canvasWidth) / 2;
-            pzPointY = (ch - canvasHeight) / 2;
-            if (pzPointX < 0) pzPointX = 50; 
-            if (pzPointY < 0) pzPointY = 50;
+            const ch = (container.clientHeight || 500) - 20;
+            const pad = 40;
+            const fitScaleX = (cw - pad) / canvasWidth;
+            const fitScaleY = (ch - pad) / canvasHeight;
+            pzScale = Math.min(fitScaleX, fitScaleY, 1);
+            if (pzScale < 0.3) pzScale = 0.3;
+            pzPointX = (cw - canvasWidth * pzScale) / 2;
+            pzPointY = (ch - canvasHeight * pzScale) / 2;
+            if (pzPointX < 0) pzPointX = Math.max(0, pzPointX);
+            if (pzPointY < 0) pzPointY = Math.max(0, pzPointY);
             pzCurrentArco = arco;
         }
         
