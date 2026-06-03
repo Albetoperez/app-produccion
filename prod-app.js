@@ -227,6 +227,7 @@ async function importarArchivos(input) {
     const zanjasCount = Object.keys(PARQUE_ZANJAS).length;
     const puntualesCount = Object.keys(PARQUE_PUNTUALES).length;
     const valladoCount = Object.keys(PARQUE_VALLADO).length;
+    console.log(`📊 Import: trackers=${trackersCount} zanjas=${zanjasCount} puntuales=${puntualesCount} vallado=${valladoCount} totalRows=${totalRows}`);
     if (totalRows > 0 && trackersCount === 0 && zanjasCount === 0 && puntualesCount === 0 && valladoCount === 0) {
         alert("No se pudo extraer ningún dato. Revisa que el Excel tenga las columnas esperadas:\n- CODIGO o REFERENCIA, X, Y, FILA, HINCA (para trackers)\n- X INICIO, Y INICIO, X FIN, Y FIN (para zanjas)");
     }
@@ -279,15 +280,21 @@ function procesarDatosJSON(data, fileArco) {
             return; 
         }
 
-        const nPosteKey = Object.keys(row).find(k => /^N[º°\s\.]*POSTE$|^NUMERO\s*[º°\s]?\s*POSTE$|^N[º°\s\.]+\s*POSTE$/i.test(k));
-        const parcelaKey = Object.keys(row).find(k => k === 'PARCELA');
+        const nPosteKey = Object.keys(row).find(k => {
+            const s = k.replace(/[^A-Z0-9]/gi, '');
+            return s === 'NPOSTE' || s === 'NUMEROPOSTE' || /^N[º°\s\.]*POSTE$|^NUMERO\s*[º°\s]?\s*POSTE$/i.test(k);
+        });
+        const parcelaKey = Object.keys(row).find(k => {
+            const s = k.replace(/[^A-Z0-9]/gi, '');
+            return s === 'PARCELA' || s === 'PARCELLA' || k === 'PARCELA';
+        });
         const coordXKey = Object.keys(row).find(k => {
-            const u = k.toUpperCase();
-            return u === 'X' || u === 'COORDENADA X' || u === 'COORD X' || u === 'COORDENADAX' || /^X\b/.test(u);
+            const s = k.replace(/[^A-Z0-9]/gi, '');
+            return s === 'X' || s === 'COORDENADAX' || s === 'COORDX' || s === 'COORD_X';
         });
         const coordYKey = Object.keys(row).find(k => {
-            const u = k.toUpperCase();
-            return u === 'Y' || u === 'COORDENADA Y' || u === 'COORD Y' || u === 'COORDENADAY' || /^Y\b/.test(u);
+            const s = k.replace(/[^A-Z0-9]/gi, '');
+            return s === 'Y' || s === 'COORDENADAY' || s === 'COORDY' || s === 'COORD_Y';
         });
 
         if (nPosteKey && parcelaKey && coordXKey && coordYKey) {
@@ -296,9 +303,14 @@ function procesarDatosJSON(data, fileArco) {
             const xv = parseCoord(row[coordXKey]);
             const yv = parseCoord(row[coordYKey]);
             if (!isNaN(nPoste) && nPoste > 0 && xv !== 0 && yv !== 0 && parcela) {
-                const vArcoCol = detectarArco(row['ARCO'] || '');
+                const arcoKey = Object.keys(row).find(k => {
+                    const s = k.replace(/[^A-Z0-9]/gi, '');
+                    return s === 'ARCO';
+                });
+                const vArcoCol = detectarArco(arcoKey ? String(row[arcoKey]) : '');
                 const vArco = vArcoCol !== 'S/A' ? vArcoCol : arcoEnEsteArchivo;
                 const vId = `V_${vArco}_${parcela}_${nPoste}`;
+                console.log(`Vallado OK: ${vId} x=${xv} y=${yv}`);
                 PARQUE_VALLADO[vId] = { id: vId, arco: vArco, parcela: parcela, nPoste: nPoste, x: xv, y: yv };
             }
             return;
