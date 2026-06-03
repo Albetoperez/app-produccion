@@ -229,7 +229,7 @@ async function importarArchivos(input) {
     const valladoCount = Object.keys(PARQUE_VALLADO).length;
     console.log(`📊 Import: trackers=${trackersCount} zanjas=${zanjasCount} puntuales=${puntualesCount} vallado=${valladoCount} totalRows=${totalRows}`);
     if (totalRows > 0 && trackersCount === 0 && zanjasCount === 0 && puntualesCount === 0 && valladoCount === 0) {
-        alert("No se pudo extraer ningún dato. Revisa que el Excel tenga las columnas esperadas:\n- CODIGO o REFERENCIA, X, Y, FILA, HINCA (para trackers)\n- X INICIO, Y INICIO, X FIN, Y FIN (para zanjas)");
+        alert("No se pudo extraer ningún dato. Revisa que el Excel tenga las columnas esperadas:\n- CODIGO o REFERENCIA, X, Y, FILA, HINCA (para trackers)\n- X INICIO, Y INICIO, X FIN, Y FIN (para zanjas)\n- HINCA, BLOQUE, X, Y (para vallado perimetral)\n\nAbre F12 → Console y mira los mensajes '🔍 Primeras claves del Excel:' para ver qué columnas está leyendo el archivo.");
     }
     if (btn) { btn.innerText = `✅ ¡Cargado!`; setTimeout(() => btn.innerText = "📂 Cargar Listados", 2000); }
     input.value = '';
