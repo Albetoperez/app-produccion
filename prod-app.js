@@ -287,11 +287,11 @@ function procesarDatosJSON(data, fileArco) {
         const rowKeys = Object.keys(row);
         const nPosteKey = rowKeys.find(k => {
             const s = k.replace(/[^A-Z0-9]/gi, '');
-            return s === 'NPOSTE' || s === 'NUMEROPOSTE' || s === 'NPOST' || s === 'NUMPOSTE' || s === 'NPOSTE' || /^N[º°\s\.\-\_]*[DE]?\s*[º°\s\.\-\_]*POSTE$|^NUMERO\s*[º°\s\-\._]?\s*[DE]?\s*POSTE$|^NUM\s*[º°\s\-\._]?\s*POSTE$/i.test(k);
+            return s === 'NPOSTE' || s === 'NUMEROPOSTE' || s === 'NPOST' || s === 'NUMPOSTE' || s === 'NPOSTE' || s === 'HINCA' || /^N[º°\s\.\-\_]*[DE]?\s*[º°\s\.\-\_]*POSTE$|^NUMERO\s*[º°\s\-\._]?\s*[DE]?\s*POSTE$|^NUM\s*[º°\s\-\._]?\s*POSTE$/i.test(k);
         });
         const parcelaKey = rowKeys.find(k => {
             const s = k.replace(/[^A-Z0-9]/gi, '');
-            return s === 'PARCELA' || s === 'PARCELLA' || s === 'POLIGONO' || s === 'POLIGONO' || k === 'PARCELA';
+            return s === 'PARCELA' || s === 'PARCELLA' || s === 'POLIGONO' || s === 'BLOQUE' || k === 'PARCELA';
         });
         const coordXKey = rowKeys.find(k => {
             const s = k.replace(/[^A-Z0-9]/gi, '');
