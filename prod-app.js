@@ -938,6 +938,27 @@ function renderMatrixZanjas() {
         
         setTxt('sum-za-vallado', Math.round(valladoMetros) + " m");
         
+        let valladoParcelasHtml = '';
+        if (zaLayerState.vallado && zaLayerState.vallado.vallado) {
+            let gruposP = {};
+            vValues.forEach(v => {
+                if (!gruposP[v.parcela]) gruposP[v.parcela] = [];
+                gruposP[v.parcela].push(v);
+            });
+            Object.keys(gruposP).sort().forEach(parcela => {
+                const postesP = gruposP[parcela].sort((a, b) => a.nPoste - b.nPoste);
+                let parcelaMetros = 0;
+                for (let i = 1; i < postesP.length; i++) {
+                    const dx = postesP[i].x - postesP[i-1].x;
+                    const dy = postesP[i].y - postesP[i-1].y;
+                    parcelaMetros += Math.sqrt(dx*dx + dy*dy);
+                }
+                valladoParcelasHtml += `<div style="display:flex; align-items:center; justify-content:space-between; font-size:11px; padding:2px 4px; border-bottom:1px solid #f1f5f9;"><span style="font-weight:500; color:#475569;">Parcela ${escapeHtml(parcela)}</span><span style="font-weight:700; color:#334155;">${Math.round(parcelaMetros)} m</span></div>`;
+            });
+        }
+        const vContainer = document.getElementById('vallado-parcelas-container');
+        if (vContainer) vContainer.innerHTML = valladoParcelasHtml;
+        
         initPanZoomZanjas(); 
     } catch(e) {
         console.error("Error crítico dibujando Zanjas:", e);
