@@ -342,9 +342,9 @@ function actualizarSelectores(arcoPreferido) {
 function actualizarBloques() {
     const arcoSeleccionado = document.getElementById('select-arco').value;
     let bloques = new Set();
-    Object.values(PARQUE_MASTER).forEach(tr => { if(tr.arco === arcoSeleccionado && tr.block) bloques.add(tr.block); });
-    Object.values(PARQUE_ESTACIONES).forEach(ps => { if(ps.arco === arcoSeleccionado && ps.block) bloques.add(ps.block); });
-    Object.values(PARQUE_CAJAS).forEach(sb => { if(sb.arco === arcoSeleccionado && sb.block) bloques.add(sb.block); });
+    Object.values(PARQUE_MASTER).forEach(tr => { if(tr.arco === arcoSeleccionado && tr.block) bloques.add(tr.block.charAt(0)); });
+    Object.values(PARQUE_ESTACIONES).forEach(ps => { if(ps.arco === arcoSeleccionado && ps.block) bloques.add(ps.block.charAt(0)); });
+    Object.values(PARQUE_CAJAS).forEach(sb => { if(sb.arco === arcoSeleccionado && sb.block) bloques.add(sb.block.charAt(0)); });
     document.getElementById('select-block').innerHTML = Array.from(bloques).sort().map(b => `<option value="${b}">BLOQUE ${b}</option>`).join('');
     
     pzScale = 1; pzPointX = 0; pzPointY = 0;
@@ -369,9 +369,9 @@ async function renderMatrix() {
         container.style.paddingBottom = '0px'; 
         container.innerHTML = '';
         
-        const ids = Object.keys(PARQUE_MASTER).filter(id => PARQUE_MASTER[id].arco === arco && PARQUE_MASTER[id].block === block);
-        const psIds = Object.keys(PARQUE_ESTACIONES).filter(id => PARQUE_ESTACIONES[id].arco === arco && PARQUE_ESTACIONES[id].block === block);
-        const sbIds = Object.keys(PARQUE_CAJAS).filter(id => PARQUE_CAJAS[id].arco === arco && PARQUE_CAJAS[id].block === block);
+        const ids = Object.keys(PARQUE_MASTER).filter(id => PARQUE_MASTER[id].arco === arco && PARQUE_MASTER[id].block.startsWith(block));
+        const psIds = Object.keys(PARQUE_ESTACIONES).filter(id => PARQUE_ESTACIONES[id].arco === arco && PARQUE_ESTACIONES[id].block.startsWith(block));
+        const sbIds = Object.keys(PARQUE_CAJAS).filter(id => PARQUE_CAJAS[id].arco === arco && PARQUE_CAJAS[id].block.startsWith(block));
 
         if(ids.length === 0 && psIds.length === 0 && sbIds.length === 0) { 
             container.innerHTML = '<div class="empty-state">No hay datos para este bloque.</div>'; 
@@ -1176,7 +1176,7 @@ function actualizarContadores() {
     if (!block || !PARQUE_MASTER) return;
 
     let tH = 0, tF = 0, cH = 0, cP = 0, cT = 0, cO = 0, cM = 0; 
-    const ids = Object.keys(PARQUE_MASTER).filter(id => PARQUE_MASTER[id].arco === arco && PARQUE_MASTER[id].block === block);
+    const ids = Object.keys(PARQUE_MASTER).filter(id => PARQUE_MASTER[id].arco === arco && PARQUE_MASTER[id].block.startsWith(block));
     const lv = {'': 0, 'H': 1, 'P': 2, 'T': 3, 'O': 4, 'M': 5};
 
     for (let id of ids) {
@@ -1202,7 +1202,7 @@ function actualizarContadores() {
     const elM = document.getElementById('sum-M'); if(elM) elM.innerText = `${cM} / ${tF} totales`;
 
     let totalCajas = 0, cRed = 0, cOrange = 0, cGreen = 0;
-    const sbIds = Object.keys(PARQUE_CAJAS).filter(id => PARQUE_CAJAS[id].arco === arco && PARQUE_CAJAS[id].block === block);
+    const sbIds = Object.keys(PARQUE_CAJAS).filter(id => PARQUE_CAJAS[id].arco === arco && PARQUE_CAJAS[id].block.startsWith(block));
     
     for (let id of sbIds) {
         totalCajas++;
