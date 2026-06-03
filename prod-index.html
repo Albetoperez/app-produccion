@@ -167,6 +167,10 @@
                         <label class="za-layer-item"><input type="checkbox" checked onchange="toggleZALayer('zanja','OTRAS')"><span class="za-layer-color-box" style="background:#94a3b8"></span>Otras</label>
                     </div>
                     <div class="za-layer-group">
+                        <div class="za-layer-group-title">Vallado</div>
+                        <label class="za-layer-item"><input type="checkbox" checked onchange="toggleZALayer('vallado','vallado')"><span class="za-layer-color-box" style="background:#94a3b8"></span>Vallado perimetral</label>
+                    </div>
+                    <div class="za-layer-group">
                         <div class="za-layer-group-title">Puntuales</div>
                         <label class="za-layer-item"><input type="checkbox" checked onchange="toggleZALayer('puntual','arqueta')">Arquetas</label>
                         <label class="za-layer-item"><input type="checkbox" checked onchange="toggleZALayer('puntual','gateway')">Gateway</label>
@@ -235,10 +239,11 @@
                     <div class="sum-item" style="border-left-color: #94a3b8"><span>Otras</span><strong id="sum-za-otras">0 m</strong></div>
                 </div>
 
-                <div id="zanjas-types-legend" style="margin-top: 8px;">
-                    <div class="za-legend-item" style="color: #94a3b8;"><div class="color-box" style="background:#94a3b8;"></div>Sin comenzar</div>
-                    <div class="za-legend-item" style="color: #f59e0b;"><div class="color-box" style="background:#f59e0b;"></div>En progreso</div>
-                    <div class="za-legend-item" style="color: #22c55e;"><div class="color-box" style="background:#22c55e;"></div>Finalizada</div>
+                <div class="summary-grid" style="grid-template-columns: 1fr; margin-top: 8px;">
+                    <div class="sum-item" style="border-left-color: #6b7280">
+                        <span>Vallado perimetral</span>
+                        <strong id="sum-za-vallado">0 m</strong>
+                    </div>
                 </div>
             </div>
         </div>
