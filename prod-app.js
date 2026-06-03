@@ -260,6 +260,10 @@ function procesarDatosJSON(data, fileArco) {
     }
     if (!arcoEnEsteArchivo) arcoEnEsteArchivo = 'S/A';
 
+    if (data.length > 0) {
+        console.log('🔍 Primeras claves del Excel:', Object.keys(data[0]).map(k => JSON.stringify(k)));
+    }
+
     data.forEach(rawRow => {
         let row = {};
         for (let key in rawRow) row[key.trim().replace(/[_-]/g, ' ').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase()] = rawRow[key];
@@ -280,21 +284,22 @@ function procesarDatosJSON(data, fileArco) {
             return; 
         }
 
-        const nPosteKey = Object.keys(row).find(k => {
+        const rowKeys = Object.keys(row);
+        const nPosteKey = rowKeys.find(k => {
             const s = k.replace(/[^A-Z0-9]/gi, '');
-            return s === 'NPOSTE' || s === 'NUMEROPOSTE' || /^N[º°\s\.]*POSTE$|^NUMERO\s*[º°\s]?\s*POSTE$/i.test(k);
+            return s === 'NPOSTE' || s === 'NUMEROPOSTE' || s === 'NPOST' || s === 'NUMPOSTE' || s === 'NPOSTE' || /^N[º°\s\.\-\_]*[DE]?\s*[º°\s\.\-\_]*POSTE$|^NUMERO\s*[º°\s\-\._]?\s*[DE]?\s*POSTE$|^NUM\s*[º°\s\-\._]?\s*POSTE$/i.test(k);
         });
-        const parcelaKey = Object.keys(row).find(k => {
+        const parcelaKey = rowKeys.find(k => {
             const s = k.replace(/[^A-Z0-9]/gi, '');
-            return s === 'PARCELA' || s === 'PARCELLA' || k === 'PARCELA';
+            return s === 'PARCELA' || s === 'PARCELLA' || s === 'POLIGONO' || s === 'POLIGONO' || k === 'PARCELA';
         });
-        const coordXKey = Object.keys(row).find(k => {
+        const coordXKey = rowKeys.find(k => {
             const s = k.replace(/[^A-Z0-9]/gi, '');
-            return s === 'X' || s === 'COORDENADAX' || s === 'COORDX' || s === 'COORD_X';
+            return s === 'X' || s === 'COORDENADAX' || s === 'COORDX' || s === 'COORD_X' || s === 'COORX' || s === 'XCOORD';
         });
-        const coordYKey = Object.keys(row).find(k => {
+        const coordYKey = rowKeys.find(k => {
             const s = k.replace(/[^A-Z0-9]/gi, '');
-            return s === 'Y' || s === 'COORDENADAY' || s === 'COORDY' || s === 'COORD_Y';
+            return s === 'Y' || s === 'COORDENADAY' || s === 'COORDY' || s === 'COORD_Y' || s === 'COORY' || s === 'YCOORD';
         });
 
         if (nPosteKey && parcelaKey && coordXKey && coordYKey) {
@@ -303,15 +308,17 @@ function procesarDatosJSON(data, fileArco) {
             const xv = parseCoord(row[coordXKey]);
             const yv = parseCoord(row[coordYKey]);
             if (!isNaN(nPoste) && nPoste > 0 && xv !== 0 && yv !== 0 && parcela) {
-                const arcoKey = Object.keys(row).find(k => {
+                const arcoKey = rowKeys.find(k => {
                     const s = k.replace(/[^A-Z0-9]/gi, '');
-                    return s === 'ARCO';
+                    return s === 'ARCO' || s === 'ARCOID';
                 });
                 const vArcoCol = detectarArco(arcoKey ? String(row[arcoKey]) : '');
                 const vArco = vArcoCol !== 'S/A' ? vArcoCol : arcoEnEsteArchivo;
                 const vId = `V_${vArco}_${parcela}_${nPoste}`;
                 console.log(`Vallado OK: ${vId} x=${xv} y=${yv}`);
                 PARQUE_VALLADO[vId] = { id: vId, arco: vArco, parcela: parcela, nPoste: nPoste, x: xv, y: yv };
+            } else {
+                console.log(`⚠️ Vallado skip: nPosteKey=${nPosteKey} parcelaKey=${parcelaKey} coordXKey=${coordXKey} coordYKey=${coordYKey} nPoste=${nPoste} xv=${xv} yv=${yv} parcela="${parcela}"`);
             }
             return;
         }
