@@ -8,8 +8,10 @@ let PARQUE_CAJAS = {};
 let HISTORIAL_CAJAS = {};
 let PARQUE_ZANJAS = {}; 
 let PARQUE_PUNTUALES = {};
+let PARQUE_VALLADO = {};
 let HISTORIAL_ZANJAS = {}; 
-let HISTORIAL_PUNTUALES = {}; 
+let HISTORIAL_PUNTUALES = {};
+let HISTORIAL_VALLADO = {}; 
 let _currentCajaId = null;
 let _currentPuntual = null; 
 
@@ -21,7 +23,8 @@ let pzCurrentArco = null;
 let zaPanelCollapsed = false;
 let zaLayerState = {
     zanja: { 'MT': true, 'BT': true, 'SSAA': true, 'PAT': true, 'CCTV': true, 'ENTRADA_PS': true, 'OTRAS': true },
-    puntual: { 'arqueta': true, 'gateway': true, 'mbox': true, 'tbox': true, 'meteo': true, 'csb': true, 'cctv': true } 
+    puntual: { 'arqueta': true, 'gateway': true, 'mbox': true, 'tbox': true, 'meteo': true, 'csb': true, 'cctv': true },
+    vallado: { 'vallado': true }
 };
 
 localforage.config({ name: 'SIGMA_PROD_V1', storeName: 'produccion_hincas' });
@@ -61,6 +64,19 @@ const CHECKLIST_PUNTUALES = {
         {id: 'pat', label: '⚡ PAT'},
         {id: 'inst_equipos', label: '🔌 Instalación Equipos'},
         {id: 'conexionado', label: '🔋 Conexionado Equipos'}
+    ]
+};
+
+const CHECKLIST_VALLADO = {
+    'vallado': [
+        {id: 'puntos_topograficos', label: '📍 1. Puntos Topográficos', type: 'bool'},
+        {id: 'comprobacion_materiales', label: '📋 2. Comprobación de Materiales', type: 'bool'},
+        {id: 'replanteo', label: '📐 3. Replanteo y postes', type: 'counter'},
+        {id: 'hormigonado', label: '🧱 4. Hormigonado y aplomado postes', type: 'counter'},
+        {id: 'malla_cinegetica', label: '🦌 5. Malla cinegética', type: 'bool'},
+        {id: 'postes_tensores', label: '🔩 6. Instalación Postes tensores', type: 'bool'},
+        {id: 'postes_esquina', label: '📐 7. Instalación Postes esquina', type: 'bool'},
+        {id: 'puerta_vehicular', label: '🚧 8. Puerta vehicular', type: 'bool'}
     ]
 };
 
@@ -148,12 +164,14 @@ async function limpiarProyecto() {
         PARQUE_CAJAS = {}; 
         PARQUE_ZANJAS = {}; 
         PARQUE_PUNTUALES = {};
+        PARQUE_VALLADO = {};
         
         await localforage.setItem('PARQUE_MASTER_DATA', PARQUE_MASTER);
         await localforage.setItem('PARQUE_ESTACIONES_DATA', PARQUE_ESTACIONES);
         await localforage.setItem('PARQUE_CAJAS_DATA', PARQUE_CAJAS);
         await localforage.setItem('PARQUE_ZANJAS_DATA', PARQUE_ZANJAS);
         await localforage.setItem('PARQUE_PUNTUALES_DATA', PARQUE_PUNTUALES);
+        await localforage.setItem('PARQUE_VALLADO_DATA', PARQUE_VALLADO);
         
         alert("Pizarra limpia. Ya puedes cargar tus Excel.");
         window.location.reload();
@@ -202,12 +220,14 @@ async function importarArchivos(input) {
         await localforage.setItem('PARQUE_CAJAS_DATA', PARQUE_CAJAS);
         await localforage.setItem('PARQUE_ZANJAS_DATA', PARQUE_ZANJAS);
         await localforage.setItem('PARQUE_PUNTUALES_DATA', PARQUE_PUNTUALES);
+        await localforage.setItem('PARQUE_VALLADO_DATA', PARQUE_VALLADO);
     } catch (e) { console.error("Error IndexedDB:", e); alert("Error al guardar en IndexedDB. Puede que el navegador no permita almacenamiento."); }
     
     const trackersCount = Object.keys(PARQUE_MASTER).length;
     const zanjasCount = Object.keys(PARQUE_ZANJAS).length;
     const puntualesCount = Object.keys(PARQUE_PUNTUALES).length;
-    if (totalRows > 0 && trackersCount === 0 && zanjasCount === 0 && puntualesCount === 0) {
+    const valladoCount = Object.keys(PARQUE_VALLADO).length;
+    if (totalRows > 0 && trackersCount === 0 && zanjasCount === 0 && puntualesCount === 0 && valladoCount === 0) {
         alert("No se pudo extraer ningún dato. Revisa que el Excel tenga las columnas esperadas:\n- CODIGO o REFERENCIA, X, Y, FILA, HINCA (para trackers)\n- X INICIO, Y INICIO, X FIN, Y FIN (para zanjas)");
     }
     if (btn) { btn.innerText = `✅ ¡Cargado!`; setTimeout(() => btn.innerText = "📂 Cargar Listados", 2000); }
@@ -257,6 +277,25 @@ function procesarDatosJSON(data, fileArco) {
                 PARQUE_ZANJAS[zId] = { id: zId, ref: ref, x1: x1, y1: y1, x2: x2, y2: y2, arco: zArco };
             }
             return; 
+        }
+
+        const nPosteKey = Object.keys(row).find(k => /^N[º\s]*POSTE$|^NUMERO\s+POSTE$|^N\s+POSTE$/.test(k));
+        const parcelaKey = Object.keys(row).find(k => k === 'PARCELA');
+        const coordXKey = Object.keys(row).find(k => k === 'COORDENADA X' || k === 'X');
+        const coordYKey = Object.keys(row).find(k => k === 'COORDENADA Y' || k === 'Y');
+
+        if (nPosteKey && parcelaKey && coordXKey && coordYKey) {
+            const nPoste = parseInt(String(row[nPosteKey]).replace(/[^\d]/g, ''), 10);
+            const parcela = String(row[parcelaKey]).trim();
+            const xv = parseCoord(row[coordXKey]);
+            const yv = parseCoord(row[coordYKey]);
+            if (!isNaN(nPoste) && nPoste > 0 && xv !== 0 && yv !== 0 && parcela) {
+                const vArcoCol = detectarArco(row['ARCO'] || '');
+                const vArco = vArcoCol !== 'S/A' ? vArcoCol : arcoEnEsteArchivo;
+                const vId = `V_${vArco}_${parcela}_${nPoste}`;
+                PARQUE_VALLADO[vId] = { id: vId, arco: vArco, parcela: parcela, nPoste: nPoste, x: xv, y: yv };
+            }
+            return;
         }
 
         const refPuntual = row['REFERENCIA'] || row['CODIGO'] || row['TIPO'] || row['CAPA'];
@@ -326,6 +365,7 @@ function actualizarSelectores(arcoPreferido) {
     Object.values(PARQUE_PUNTUALES).forEach(p => { if(p.arco) arcos.add(p.arco); });
     Object.values(PARQUE_ESTACIONES).forEach(ps => { if(ps.arco) arcos.add(ps.arco); });
     Object.values(PARQUE_CAJAS).forEach(sb => { if(sb.arco) arcos.add(sb.arco); });
+    Object.values(PARQUE_VALLADO).forEach(v => { if(v.arco) arcos.add(v.arco); });
     const selectArco = document.getElementById('select-arco');
     const valorAntes = selectArco.value;
     if (arcos.size === 0) {
@@ -451,6 +491,33 @@ async function renderMatrix() {
             }
             html += `</div>`;
         }
+        let vEM = Object.values(PARQUE_VALLADO).filter(v => v.arco === arco);
+        if (vEM.length > 0) {
+            let gruposEM = {};
+            vEM.forEach(v => {
+                if (!gruposEM[v.parcela]) gruposEM[v.parcela] = [];
+                gruposEM[v.parcela].push(v);
+            });
+            let svgEM = `<svg style="position:absolute; top:0; left:0; width:${canvasWidth}px; height:${canvasHeight}px; pointer-events:none; z-index:1; overflow:visible;">`;
+            Object.keys(gruposEM).sort().forEach(parcela => {
+                const postesEM = gruposEM[parcela].sort((a, b) => a.nPoste - b.nPoste);
+                for (let i = 0; i < postesEM.length; i++) {
+                    const p = postesEM[i];
+                    const pxX = (((p.x - gMinX) * SCALE_X) + MARGIN_LEFT);
+                    const pxY = ((gMaxY - p.y) * SCALE_Y) + MARGIN_TOP_BOTTOM;
+                    if (i > 0) {
+                        const prev = postesEM[i - 1];
+                        const ppxX = (((prev.x - gMinX) * SCALE_X) + MARGIN_LEFT);
+                        const ppxY = ((gMaxY - prev.y) * SCALE_Y) + MARGIN_TOP_BOTTOM;
+                        svgEM += `<line x1="${ppxX}" y1="${ppxY}" x2="${pxX}" y2="${pxY}" stroke="#d1d5db" stroke-width="2" stroke-dasharray="4,3" stroke-linecap="round"></line>`;
+                    }
+                    html += `<div style="position:absolute; left:${pxX - 4}px; top:${pxY - 4}px; width:8px; height:8px; border-radius:50%; background:#d1d5db; border:1px solid #9ca3af; pointer-events:none; z-index:2;"></div>`;
+                }
+            });
+            svgEM += `</svg>`;
+            html += svgEM;
+        }
+
         container.innerHTML = html + '</div>';
         
         const bName = document.getElementById('summary-block-name');
@@ -576,6 +643,27 @@ function getColorPuntual(count, max) {
     return 'rgba(255, 130, 0, 0.45)';
 }
 
+function getValladoKey(arco, parcela) {
+    return `VALLADO_${arco}_${parcela}`;
+}
+
+function getValladoPosteColor(arco, parcela, nPoste) {
+    const key = getValladoKey(arco, parcela);
+    const hist = HISTORIAL_VALLADO[key] || {};
+    const replanteo = hist.replanteo || 0;
+    const hormigonado = hist.hormigonado || 0;
+    if (nPoste <= hormigonado) return '#22c55e';
+    if (nPoste <= replanteo) return '#f59e0b';
+    return '#94a3b8';
+}
+
+function contarValladoChecks(checks) {
+    const boolItems = ['puntos_topograficos', 'comprobacion_materiales', 'malla_cinegetica', 'postes_tensores', 'postes_esquina', 'puerta_vehicular'];
+    let count = 0;
+    boolItems.forEach(id => { if (checks[id]) count++; });
+    return count;
+}
+
 function renderMatrixZanjas() {
     try {
         const arco = document.getElementById('select-arco').value;
@@ -591,7 +679,9 @@ function renderMatrixZanjas() {
         let zValues = Object.values(PARQUE_ZANJAS).filter(z => z.arco === arco);
         let pValues = Object.values(PARQUE_PUNTUALES).filter(p => p.arco === arco);
 
-        if(ids.length === 0 && sbIds.length === 0 && zValues.length === 0 && pValues.length === 0) { 
+        let vValues = Object.values(PARQUE_VALLADO).filter(v => v.arco === arco);
+
+        if(ids.length === 0 && sbIds.length === 0 && zValues.length === 0 && pValues.length === 0 && vValues.length === 0) { 
             container.innerHTML = '<div class="empty-state">No hay datos para esta vista de Arco.</div>'; 
             return; 
         }
@@ -610,6 +700,11 @@ function renderMatrixZanjas() {
         pValues.forEach(p => {
             if(p.x < gMinX) gMinX = p.x; if(p.x > gMaxX) gMaxX = p.x;
             if(p.y < gMinY) gMinY = p.y; if(p.y > gMaxY) gMaxY = p.y;
+        });
+
+        vValues.forEach(v => {
+            if(v.x < gMinX) gMinX = v.x; if(v.x > gMaxX) gMaxX = v.x;
+            if(v.y < gMinY) gMinY = v.y; if(v.y > gMaxY) gMaxY = v.y;
         });
 
         if (gMinX === Infinity) gMinX = 0;
@@ -762,6 +857,39 @@ function renderMatrixZanjas() {
             }
         });
 
+        let valladoMetros = 0;
+        if (zaLayerState.vallado && zaLayerState.vallado.vallado) {
+            let grupos = {};
+            vValues.forEach(v => {
+                const key = `${v.parcela}`;
+                if (!grupos[key]) grupos[key] = [];
+                grupos[key].push(v);
+            });
+            Object.keys(grupos).sort().forEach(parcela => {
+                const postes = grupos[parcela].sort((a, b) => a.nPoste - b.nPoste);
+                for (let i = 0; i < postes.length; i++) {
+                    const p = postes[i];
+                    const pxX = ((p.x - gMinX) * baseScaleX) + MARGIN;
+                    const pxY = ((gMaxY - p.y) * baseScaleY) + MARGIN;
+                    const color = getValladoPosteColor(arco, parcela, p.nPoste);
+
+                    if (i > 0) {
+                        const prev = postes[i - 1];
+                        const ppxX = ((prev.x - gMinX) * baseScaleX) + MARGIN;
+                        const ppxY = ((gMaxY - prev.y) * baseScaleY) + MARGIN;
+                        const dx = p.x - prev.x;
+                        const dy = p.y - prev.y;
+                        const segLen = Math.sqrt(dx * dx + dy * dy);
+                        valladoMetros += segLen;
+                        const segColor = getValladoPosteColor(arco, parcela, Math.min(p.nPoste, prev.nPoste));
+                        svgHtml += `<line x1="${ppxX}" y1="${ppxY}" x2="${pxX}" y2="${pxY}" stroke="${segColor}" stroke-width="${3 / pzScale}" stroke-dasharray="${6 / pzScale},${4 / pzScale}" stroke-linecap="round" style="pointer-events:auto; cursor:pointer;" onclick="abrirModalVallado('${escapeJsStr(arco)}', '${escapeJsStr(parcela)}')"></line>`;
+                    }
+                    const r = 5 / pzScale;
+                    svgHtml += `<circle id="vallado-${safeHtmlId(p.id)}" data-base-r="5" cx="${pxX}" cy="${pxY}" r="${r}" fill="${color}" stroke="#475569" stroke-width="${1.5 / pzScale}" style="pointer-events:auto; cursor:pointer;" onclick="abrirModalVallado('${escapeJsStr(arco)}', '${escapeJsStr(parcela)}')"></circle>`;
+                }
+            });
+        }
+
         svgHtml += `</svg>`;
         html += svgHtml;
 
@@ -807,6 +935,8 @@ function renderMatrixZanjas() {
         setTxt('sum-pt-meteo', countsPT.meteo);
         setTxt('sum-pt-csb', countsPT.csb);
         setTxt('sum-pt-cctv', countsPT.cctv);
+        
+        setTxt('sum-za-vallado', Math.round(valladoMetros) + " m");
         
         initPanZoomZanjas(); 
     } catch(e) {
@@ -910,6 +1040,16 @@ function initPanZoomZanjas() {
         
         document.querySelectorAll('#zanjas-viewport line').forEach(line => { 
             line.setAttribute('stroke-width', 4 / pzScale); 
+        });
+        
+        document.querySelectorAll('#zanjas-viewport circle[id^="vallado-"]').forEach(c => { 
+            const r = parseFloat(c.getAttribute('data-base-r') || '5');
+            c.setAttribute('r', r / pzScale); 
+            c.setAttribute('stroke-width', 1.5 / pzScale); 
+        });
+        
+        document.querySelectorAll('#zanjas-viewport line[stroke-dasharray]').forEach(line => { 
+            line.setAttribute('stroke-dasharray', `${6 / pzScale},${4 / pzScale}`); 
         });
         
         document.querySelectorAll('#zanjas-viewport text.za-cut-text').forEach(txt => { 
@@ -1231,6 +1371,8 @@ window.onload = async () => {
         const z = await localforage.getItem('PARQUE_ZANJAS_DATA'); 
         const pt = await localforage.getItem('PARQUE_PUNTUALES_DATA'); 
         const hzanjas = await localforage.getItem('HISTORIAL_ZANJAS'); 
+        const vd = await localforage.getItem('PARQUE_VALLADO_DATA');
+        const hvallado = await localforage.getItem('HISTORIAL_VALLADO');
 
         if(s) PARQUE_MASTER = s; 
         if(ps) PARQUE_ESTACIONES = ps; 
@@ -1240,6 +1382,8 @@ window.onload = async () => {
         if(z) PARQUE_ZANJAS = z; 
         if(pt) PARQUE_PUNTUALES = pt; 
         if(hzanjas) HISTORIAL_ZANJAS = hzanjas; 
+        if(vd) PARQUE_VALLADO = vd;
+        if(hvallado) HISTORIAL_VALLADO = hvallado;
 
         if (h) {
             for (let key in h) {
@@ -1324,6 +1468,86 @@ async function changeMetrosZanja(id, itemId, value, maxMetros) {
         HISTORIAL_ZANJAS[id][itemId] = num;
     }
     try { await localforage.setItem('HISTORIAL_ZANJAS', HISTORIAL_ZANJAS); } catch (e) { console.error(e); }
+    renderMatrixZanjas();
+}
+
+function abrirModalVallado(arco, parcela) {
+    cerrarModalVallado();
+    const key = getValladoKey(arco, parcela);
+    const postes = Object.values(PARQUE_VALLADO).filter(v => v.arco === arco && v.parcela === parcela);
+    const totalPostes = postes.length;
+    if (totalPostes === 0) return;
+
+    let stats = HISTORIAL_VALLADO[key] || {};
+
+    let html = `
+    <div id="modal-vallado-overlay" class="modal-overlay" onclick="cerrarModalVallado()">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <h3>Vallado: <span style="color:var(--accent);">${escapeHtml(arco)} - Parcela ${escapeHtml(parcela)}</span></h3>
+            <p style="margin-top:-8px; margin-bottom:20px; color:#64748b; font-size:13px;">Postes totales: <strong>${totalPostes}</strong></p>
+            <div class="checklist" style="display:flex; flex-direction:column; gap:4px;">`;
+
+    CHECKLIST_VALLADO['vallado'].forEach(item => {
+        if (item.type === 'bool') {
+            const isChecked = stats[item.id] ? 'checked' : '';
+            html += `
+            <label class="check-item">
+                <input type="checkbox" ${isChecked} onchange="toggleCheckVallado('${escapeJsStr(key)}', '${item.id}', this.checked)">
+                ${item.label}
+            </label>`;
+        } else if (item.type === 'counter') {
+            const val = stats[item.id] !== undefined ? stats[item.id] : 0;
+            html += `
+            <div class="zanja-item" style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; gap:15px; font-size:14px; border-bottom:1px dashed #e2e8f0; padding-bottom:6px;">
+                <span style="font-weight:500; color:#334155;">${item.label}</span>
+                <div style="display:flex; align-items:center; gap:5px;">
+                    <input type="number" min="0" max="${totalPostes}" placeholder="0" value="${val}" 
+                           style="width:75px; padding:5px; border:1px solid #cbd5e1; border-radius:6px; text-align:center; font-weight:bold; color:var(--accent);"
+                           oninput="changeValladoContador('${escapeJsStr(key)}', '${item.id}', this.value, ${totalPostes})">
+                    <span style="color:#64748b; font-weight:600; font-size:13px; min-width:65px;">/ [${totalPostes}]</span>
+                </div>
+            </div>`;
+        }
+    });
+
+    html += `
+            </div>
+            <button class="btn-close" style="margin-top:15px; width:100%;" onclick="cerrarModalVallado()">Guardar y Cerrar</button>
+        </div>
+    </div>`;
+
+    document.body.insertAdjacentHTML('beforeend', html);
+}
+
+function cerrarModalVallado() {
+    const m = document.getElementById('modal-vallado-overlay');
+    if (m) {
+        m.remove();
+        if (currentAppMode === 'ZA') renderMatrixZanjas();
+    }
+}
+
+async function toggleCheckVallado(key, itemId, isChecked) {
+    if (!HISTORIAL_VALLADO[key]) HISTORIAL_VALLADO[key] = {};
+    const hoy = document.getElementById('fecha-produccion') ? document.getElementById('fecha-produccion').value : '';
+    if (isChecked) {
+        HISTORIAL_VALLADO[key][itemId] = hoy;
+    } else {
+        delete HISTORIAL_VALLADO[key][itemId];
+    }
+    try { await localforage.setItem('HISTORIAL_VALLADO', HISTORIAL_VALLADO); } catch (e) { console.error(e); }
+}
+
+async function changeValladoContador(key, itemId, value, totalPostes) {
+    if (!HISTORIAL_VALLADO[key]) HISTORIAL_VALLADO[key] = {};
+    let num = parseInt(value, 10);
+    if (isNaN(num) || num < 0 || value.trim() === '') {
+        delete HISTORIAL_VALLADO[key][itemId];
+    } else {
+        if (num > totalPostes) num = totalPostes;
+        HISTORIAL_VALLADO[key][itemId] = num;
+    }
+    try { await localforage.setItem('HISTORIAL_VALLADO', HISTORIAL_VALLADO); } catch (e) { console.error(e); }
     renderMatrixZanjas();
 }
 
